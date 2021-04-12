@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "module": "CommonJS",
+    "target": "es5",
+    "lib": ["DOM", "ES2020"],
+    "sourceMap": false,
+    "moduleResolution": "node",
+    "strict": true,
+    "declaration": true,
+    "downlevelIteration": true,
+    "allowSyntheticDefaultImports": true,
+    "typeRoots": ["./node_modules/@types"],
+    "resolveJsonModule": true,
+    "declarationDir": "./lib/types",
+    "outDir": "./lib",
+    "noImplicitAny": false
+  },
+  "include": ["./src"]
+}
