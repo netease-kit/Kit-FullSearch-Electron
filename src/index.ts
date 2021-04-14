@@ -8,7 +8,7 @@ export interface IFullTextNim {
   sendText(opt: any): void
   sendCustomMsg(opt: any): void
   saveMsgsToLocal(opt: any): void
-  getLocalMsgs(opt: any): void
+  getLocalMsgsToFts(opt: any): void
   deleteMsg(opt: any): void
   deleteLocalMsg(opt: any): void
   deleteAllLocalMsgs(opt: any): void
@@ -214,7 +214,7 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public getLocalMsgs(opt: any) {
+    public getLocalMsgsToFts(opt: any) {
       super.getLocalMsgs({
         ...opt,
         done: (err: any, obj: any) => {

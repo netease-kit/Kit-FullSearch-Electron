@@ -28,7 +28,7 @@ NIM.getInstance({
 })
 ```
 
-组件扩展了以下 nim 的方法，会自动将数据分词后同步到本地的 searchDB
+组件扩展了以下 nim 的方法，会自动将数据分词后同步到本地的 searchDB。使用组件后，新消息组件会自动同步到 searchDB，历史消息需要通过使用者主动调用 `nim.getLocalMsgsToFts` 来同步到 searchDB 中。
 
 - `onroamingmsgs`
 - `onofflinemsgs`
@@ -41,7 +41,6 @@ NIM.getInstance({
 - `deleteAllLocalMsgs`
 - `deleteMsgSelf`
 - `deleteMsgSelfBatch`
-- `getLocalMsgs`
 
 请使用者按需使用。关于以上 API 的详细介绍，可以查看 nim[官方文档](https://dev.yunxin.163.com/docs/interface/%E5%8D%B3%E6%97%B6%E9%80%9A%E8%AE%AFWeb%E7%AB%AF/NIMSDK-Web/NIM.html)
 
@@ -57,7 +56,55 @@ NIM.getInstance({
 
 **另外，经过扩展后的 nim 实例上，新增了以下方法**
 
-#### queryFts(text: string, limit?: number): Promise<any> 根据关键字进行全文检索，返回查询的结果
+#### getLocalMsgsToFts(opt): void
+
+调用 nim 的 getLocalMsgs 查询历史消息，并将数据存入本地 searchDB。参数同 nim.getLocalMsgs。
+
+```js
+nim.getLocalMsgsToFts({
+  ...opt,
+  done(err, obj) {
+    if (!err) {
+      console.log('查询并同步本地消息成功')
+    }
+  },
+})
+```
+
+如果本地数据量较大，一次性同步所有数据并存入 searchDB 可能会导致性能问题。因此，在这种场景下，建议使用者自行控制调用该方法的时机。
+以下是一个递归调用的例子
+
+```js
+const handler = (start, end) => {
+  if (start < Date.now()) {
+    nim.getLocalMsgsToFts({
+      start, // 起点
+      end, // 终点
+      desc: false, // 从start开始查
+      types: ['text', 'custom'], // 只针对文本消息和自定义消息
+      done: getLocalMsgsToFtsDone,
+    })
+
+    function getLocalMsgsToFtsDone(error, obj) {
+      console.log('获取并同步本地消息' + (!error ? '成功' : '失败'), error, obj)
+      if (!error) {
+        const newStart = end + 24 * 60 * 60 * 1000 // 取上一次执行结束的时间的后一天作为新一轮查询的起点
+        const newEnd = newStart + 7 * 24 * 60 * 60 * 1000 // 取下一轮7天内的数据
+        handler(newStart, newEnd)
+      }
+    }
+  }
+}
+
+// 从30天前开始查，每次查询7天
+const start = Date.now() - 30 * 24 * 60 * 60 * 1000
+const end = start + 7 * 24 * 60 * 60 * 1000
+handler(start, end)
+```
+
+#### queryFts(text: string, limit?: number): Promise<any>
+
+根据关键字进行全文检索，返回查询的结果
 
 ```js
 nim
@@ -70,7 +117,9 @@ nim
   })
 ```
 
-#### putFts(msgs: Msg | Msg[]): Promise<void> 新增以及修改 searchDB 中的数据
+#### putFts(msgs: Msg | Msg[]): Promise<void>
+
+新增以及修改 searchDB 中的数据
 
 ```js
 nim
@@ -83,7 +132,9 @@ nim
   })
 ```
 
-#### deleteFts(ids: string | string[]): Promise<void> 根据 idClient 删除 searchDB 中的数据
+#### deleteFts(ids: string | string[]): Promise<void>
+
+根据 idClient 删除 searchDB 中的数据
 
 ```js
 nim
@@ -96,7 +147,9 @@ nim
   })
 ```
 
-#### clearAllFts(): Promise<void> 清楚所有 searchDB 中的数据
+#### clearAllFts(): Promise<void>
+
+清除所有 searchDB 中的数据
 
 ```js
 nim
