@@ -1,4 +1,4 @@
-'use strict';
+'use strict'
 
 module.exports = {
   parser: '@typescript-eslint/parser',
@@ -11,10 +11,7 @@ module.exports = {
     'prettier',
     'prettier/@typescript-eslint',
   ],
-  plugins: [
-    '@typescript-eslint',
-    'prettier',
-  ],
+  plugins: ['@typescript-eslint', 'prettier'],
   rules: {
     'prettier/prettier': 1,
     'sort-keys': 0,
@@ -44,9 +41,12 @@ module.exports = {
     '@typescript-eslint/no-parameter-properties': 0,
     '@typescript-eslint/no-unused-vars': 0,
     '@typescript-eslint/no-explicit-any': 0,
+    '@typescript-eslint/no-var-requires': 0,
+    '@typescript-eslint/interface-name-prefix': 0,
+    '@typescript-eslint/ban-ts-ignore': 0,
   },
   env: {
     browser: true,
     node: true,
   },
-};
+}

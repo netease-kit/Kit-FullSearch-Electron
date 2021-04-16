@@ -18,7 +18,7 @@
   "author": "Netease-yunxin",
   "license": "CC0-1.0",
   "dependencies": {
-    "electron": "^11.3.0",
+    "electron": "^11.4.2",
     "mockjs": "^1.1.0",
     "nodejieba": "^2.5.1",
     "search-index": "^2.3.0"
