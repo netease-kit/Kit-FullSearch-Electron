@@ -46,7 +46,6 @@ class Test {
       'userUpdateTime|1600000000000-1700000000000': 1,
     }
     this.ignoreChars = window.nim.ignoreChars
-    this.nodejieba = window.nim.nodejieba
     this.searchDB = window.nim.searchDB
     this.request = window.indexedDB.open('nim-cs6')
     this.request.onerror = (event) => {
@@ -110,9 +109,7 @@ class Test {
     console.time(TAG_NAME, 'readByKeyword last')
 
     // searchDB.INDEX.STORE.clear()  清除所有
-    const searchParams = this.nodejieba
-      .cut(text)
-      .filter((word) => !this.ignoreChars.includes(word))
+    const searchParams = window.nim._cut(text)
     await this.searchDB
       .QUERY({
         SEARCH: searchParams,
@@ -141,15 +138,13 @@ class Test {
       text = text || Mock.Random.cparagraph(2, 10)
       fts.push({
         _id: temp.idClient,
-        idx: this.nodejieba
-          .cut(text)
-          .filter((word) => !this.ignoreChars.includes(word)),
+        idx: window.nim._cut(text),
       })
       objectStore.add({
         ...temp,
         text,
         // terms: FullText.tokenize(temp.text, 'ch').filter(word => !this.ignoreChars.includes(word))
-        // terms: nodejieba.cut(temp.text).filter(word => !this.ignoreChars.includes(word))
+        // terms: window.nim._cut(temp.text).filter(word => !this.ignoreChars.includes(word))
       })
     }
 

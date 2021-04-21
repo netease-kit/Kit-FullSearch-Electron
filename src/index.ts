@@ -44,7 +44,6 @@ const fullText = (NimSdk: any) => {
   return class FullTextNim extends NimSdk implements IFullTextNim {
     public static instance: FullTextNim | null
     searchDB: any
-    nodejieba = nodejieba
     logFunc: (...args: any) => void
     ignoreChars: string
     searchDBName: string
@@ -210,9 +209,7 @@ const fullText = (NimSdk: any) => {
     }
 
     public async queryFts(text: string, limit = 100): Promise<any> {
-      const searchParams = nodejieba
-        .cut(text)
-        .filter((word) => !this.ignoreChars.includes(word))
+      const searchParams = this._cut(text)
       try {
         const records = await this.searchDB.QUERY({
           SEARCH: searchParams,
@@ -240,9 +237,7 @@ const fullText = (NimSdk: any) => {
       const fts = msgs
         .filter((msg) => msg.text && msg.idClient)
         .map((msg) => ({
-          idx: nodejieba
-            .cut(msg.text)
-            .filter((word) => !this.ignoreChars.includes(word)),
+          idx: this._cut(msg.text),
           _id: msg.idClient,
         }))
 
@@ -306,7 +301,14 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public static async getInstance(initOpt: IInitOpt) {
+    // 分词函数
+    _cut(text: string): string[] {
+      return nodejieba
+        .cut(text)
+        .filter((word) => !this.ignoreChars.includes(word))
+    }
+
+    public static async getInstance(initOpt: IInitOpt): Promise<any> {
       if (!this.instance) {
         this.instance = new FullTextNim(initOpt)
         try {
