@@ -26,6 +26,7 @@ export interface IInitOpt {
   appKey: string
   ignoreChars?: string
   searchDBName?: string
+  searchDBPath?: string
   logFunc?: (...args: any) => void
   debug?: boolean
   [key: string]: any
@@ -43,10 +44,10 @@ const fullText = (NimSdk: any) => {
   return class FullTextNim extends NimSdk implements IFullTextNim {
     public static instance: FullTextNim | null
     searchDB: any
-    nodejieba = nodejieba
     logFunc: (...args: any) => void
     ignoreChars: string
     searchDBName: string
+    searchDBPath: string
 
     constructor(initOpt: IInitOpt) {
       super(initOpt)
@@ -56,6 +57,7 @@ const fullText = (NimSdk: any) => {
         appKey,
         ignoreChars,
         searchDBName,
+        searchDBPath,
         debug,
         logFunc,
       } = initOpt
@@ -64,7 +66,9 @@ const fullText = (NimSdk: any) => {
       if (debug) {
         this.logFunc = logFunc || logger.log.bind(logger)
       } else {
-        this.logFunc = () => {}
+        this.logFunc = (): void => {
+          // i'm empty
+        }
       }
 
       if (!account || !appKey) {
@@ -75,38 +79,16 @@ const fullText = (NimSdk: any) => {
         ignoreChars ||
         ' \t\r\n~!@#$%^&*()_+-=【】、{}|;\':"，。、《》？αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ。，、；：？！…—·ˉ¨‘’“”々～‖∶＂＇｀｜〃〔〕〈〉《》「」『』．〖〗【】（）［］｛｝ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩⅪⅫ⒈⒉⒊⒋⒌⒍⒎⒏⒐⒑⒒⒓⒔⒕⒖⒗⒘⒙⒚⒛㈠㈡㈢㈣㈤㈥㈦㈧㈨㈩①②③④⑤⑥⑦⑧⑨⑩⑴⑵⑶⑷⑸⑹⑺⑻⑼⑽⑾⑿⒀⒁⒂⒃⒄⒅⒆⒇≈≡≠＝≤≥＜＞≮≯∷±＋－×÷／∫∮∝∞∧∨∑∏∪∩∈∵∴⊥∥∠⌒⊙≌∽√§№☆★○●◎◇◆□℃‰€■△▲※→←↑↓〓¤°＃＆＠＼︿＿￣―♂♀┌┍┎┐┑┒┓─┄┈├┝┞┟┠┡┢┣│┆┊┬┭┮┯┰┱┲┳┼┽┾┿╀╁╂╃└┕┖┗┘┙┚┛━┅┉┤┥┦┧┨┩┪┫┃┇┋┴┵┶┷┸┹┺┻╋╊╉╈╇╆╅╄'
       this.searchDBName = searchDBName || `${account}-${appKey}`
-    }
-
-    public static async getInstance(initOpt: IInitOpt) {
-      if (!this.instance) {
-        this.instance = new FullTextNim(initOpt)
-        try {
-          await this.instance.initDB()
-        } catch (err) {
-          return Promise.reject(err)
-        }
-      }
-      return NimSdk.getInstance({
-        ...initOpt,
-        onroamingmsgs: (...args: any) => {
-          this.instance?.putFts(args[0])
-          initOpt.onroamingmsgs && initOpt.onroamingmsgs(...args)
-        },
-        onofflinemsgs: (...args: any) => {
-          this.instance?.putFts(args[0])
-          initOpt.onofflinemsgs && initOpt.onofflinemsgs(...args)
-        },
-        onmsg: (...args: any) => {
-          this.instance?.putFts(args[0])
-          initOpt.onmsg && initOpt.onmsg(...args)
-        },
-      })
+      this.searchDBPath = searchDBPath || ''
     }
 
     public async initDB(): Promise<void> {
       try {
+        const finalName = this.searchDBPath
+          ? `${this.searchDBPath}/NIM-FULLTEXT-SEARCHDB-${this.searchDBName}`
+          : `NIM-FULLTEXT-SEARCHDB-${this.searchDBName}`
         this.searchDB = await si({
-          name: `NIM-FULLTEXT-SEARCHDB-${this.searchDBName}`,
+          name: finalName,
           // @ts-ignore
           storeVectors: true,
         })
@@ -117,7 +99,7 @@ const fullText = (NimSdk: any) => {
       }
     }
 
-    public sendText(opt: any) {
+    public sendText(opt: any): void {
       super.sendText({
         ...opt,
         done: (err: any, obj: any) => {
@@ -129,7 +111,7 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public sendCustomMsg(opt: any) {
+    public sendCustomMsg(opt: any): void {
       super.sendCustomMsg({
         ...opt,
         done: (err: any, obj: any) => {
@@ -141,7 +123,7 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public saveMsgsToLocal(opt: any) {
+    public saveMsgsToLocal(opt: any): void {
       super.saveMsgsToLocal({
         ...opt,
         done: (err: any, obj: any) => {
@@ -153,7 +135,7 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public deleteMsg(opt: any) {
+    public deleteMsg(opt: any): void {
       super.deleteMsg({
         ...opt,
         done: (err: any, obj: any) => {
@@ -165,7 +147,7 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public deleteLocalMsg(opt: any) {
+    public deleteLocalMsg(opt: any): void {
       super.deleteLocalMsg({
         ...opt,
         done: (err: any, obj: any) => {
@@ -177,7 +159,7 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public deleteAllLocalMsgs(opt: any) {
+    public deleteAllLocalMsgs(opt: any): void {
       super.deleteAllLocalMsgs({
         ...opt,
         done: (err: any, obj: any) => {
@@ -189,7 +171,7 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public deleteMsgSelf(opt: any) {
+    public deleteMsgSelf(opt: any): void {
       super.deleteMsgSelf({
         ...opt,
         done: (err: any, obj: any) => {
@@ -201,7 +183,7 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public deleteMsgSelfBatch(opt: any) {
+    public deleteMsgSelfBatch(opt: any): void {
       super.deleteMsgSelf({
         ...opt,
         done: (err: any, obj: any) => {
@@ -214,7 +196,7 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public getLocalMsgsToFts(opt: any) {
+    public getLocalMsgsToFts(opt: any): void {
       super.getLocalMsgs({
         ...opt,
         done: (err: any, obj: any) => {
@@ -227,15 +209,13 @@ const fullText = (NimSdk: any) => {
     }
 
     public async queryFts(text: string, limit = 100): Promise<any> {
-      var searchParams = nodejieba
-        .cut(text)
-        .filter((word) => !this.ignoreChars.includes(word))
+      const searchParams = this._cut(text)
       try {
         const records = await this.searchDB.QUERY({
           SEARCH: searchParams,
         })
         this.logFunc('queryFts searchDB QUERY success', records)
-        let idClients = records.RESULT.map((item) => item._id).slice(0, limit)
+        const idClients = records.RESULT.map((item) => item._id).slice(0, limit)
         if (!idClients || !idClients.length) {
           this.logFunc('queryFts 查询本地消息，无匹配词')
           throw '查询本地消息，无匹配词'
@@ -254,12 +234,10 @@ const fullText = (NimSdk: any) => {
         msgs = [msgs]
       }
       // 分词，并过滤无意义的符号
-      var fts = msgs
+      const fts = msgs
         .filter((msg) => msg.text && msg.idClient)
         .map((msg) => ({
-          idx: nodejieba
-            .cut(msg.text)
-            .filter((word) => !this.ignoreChars.includes(word)),
+          idx: this._cut(msg.text),
           _id: msg.idClient,
         }))
 
@@ -295,7 +273,7 @@ const fullText = (NimSdk: any) => {
       }
     }
 
-    public destroy(...args: any) {
+    public destroy(...args: any): void {
       this.searchDB.INDEX.STORE.close()
         .then(() => {
           this.logFunc('close searchDB success')
@@ -320,6 +298,39 @@ const fullText = (NimSdk: any) => {
             resolve(obj)
           },
         })
+      })
+    }
+
+    // 分词函数
+    _cut(text: string): string[] {
+      return nodejieba
+        .cut(text)
+        .filter((word) => !this.ignoreChars.includes(word))
+    }
+
+    public static async getInstance(initOpt: IInitOpt): Promise<any> {
+      if (!this.instance) {
+        this.instance = new FullTextNim(initOpt)
+        try {
+          await this.instance.initDB()
+        } catch (err) {
+          return Promise.reject(err)
+        }
+      }
+      return NimSdk.getInstance({
+        ...initOpt,
+        onroamingmsgs: (...args: any) => {
+          this.instance?.putFts(args[0])
+          initOpt.onroamingmsgs && initOpt.onroamingmsgs(...args)
+        },
+        onofflinemsgs: (...args: any) => {
+          this.instance?.putFts(args[0])
+          initOpt.onofflinemsgs && initOpt.onofflinemsgs(...args)
+        },
+        onmsg: (...args: any) => {
+          this.instance?.putFts(args[0])
+          initOpt.onmsg && initOpt.onmsg(...args)
+        },
       })
     }
   }
