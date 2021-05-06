@@ -5,17 +5,17 @@ const si = require('search-index')
 
 export interface IFullTextNim {
   initDB(): Promise<void>
-  sendText(opt: any): void
-  sendCustomMsg(opt: any): void
-  saveMsgsToLocal(opt: any): void
-  getLocalMsgsToFts(opt: any): void
-  deleteMsg(opt: any): void
-  deleteLocalMsg(opt: any): void
-  deleteAllLocalMsgs(opt: any): void
-  deleteMsgSelf(opt: any): void
-  deleteMsgSelfBatch(opt: any): void
-  queryFts(text: string, limit?: number): Promise<any>
-  putFts(msgs: Msg | Msg[]): Promise<void>
+  sendText(opt: any): any
+  sendCustomMsg(opt: any): any
+  saveMsgsToLocal(opt: any): any
+  getLocalMsgsToFts(opt: any): any
+  deleteMsg(opt: any): any
+  deleteLocalMsg(opt: any): any
+  deleteAllLocalMsgs(opt: any): any
+  deleteMsgSelf(opt: any): any
+  deleteMsgSelfBatch(opt: any): any
+  queryFts(params: IQueryParams): Promise<any>
+  putFts(msgs: IMsg | IMsg[]): Promise<void>
   deleteFts(ids: string | string[]): Promise<void>
   clearAllFts(): Promise<void>
   destroy(...args: any): void
@@ -32,8 +32,30 @@ export interface IInitOpt {
   [key: string]: any
 }
 
-export interface Msg {
+export type IDirection = 'ascend' | 'descend'
+
+export type ILogic = 'and' | 'or'
+
+export interface IQueryParams {
+  text: string
+  limit?: number
+  sessionIds?: string[]
+  timeDirection?: IDirection
+  start?: number
+  end?: number
+  textLogic?: ILogic
+  sessionIdLogic?: ILogic
+}
+
+export interface IMsg {
   [key: string]: any
+}
+
+export interface ISiItem {
+  _id: string
+  time: number
+  sessionId: string
+  idx: string
 }
 
 /**
@@ -99,8 +121,8 @@ const fullText = (NimSdk: any) => {
       }
     }
 
-    public sendText(opt: any): void {
-      super.sendText({
+    public sendText(opt: any): any {
+      return super.sendText({
         ...opt,
         done: (err: any, obj: any) => {
           if (!err && obj.idClient) {
@@ -111,8 +133,8 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public sendCustomMsg(opt: any): void {
-      super.sendCustomMsg({
+    public sendCustomMsg(opt: any): any {
+      return super.sendCustomMsg({
         ...opt,
         done: (err: any, obj: any) => {
           if (!err && obj.idClient) {
@@ -123,8 +145,8 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public saveMsgsToLocal(opt: any): void {
-      super.saveMsgsToLocal({
+    public saveMsgsToLocal(opt: any): any {
+      return super.saveMsgsToLocal({
         ...opt,
         done: (err: any, obj: any) => {
           if (!err) {
@@ -135,8 +157,8 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public deleteMsg(opt: any): void {
-      super.deleteMsg({
+    public deleteMsg(opt: any): any {
+      return super.deleteMsg({
         ...opt,
         done: (err: any, obj: any) => {
           if (!err && opt.msg && opt.msg.idClient) {
@@ -147,8 +169,8 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public deleteLocalMsg(opt: any): void {
-      super.deleteLocalMsg({
+    public deleteLocalMsg(opt: any): any {
+      return super.deleteLocalMsg({
         ...opt,
         done: (err: any, obj: any) => {
           if (!err && opt.msg && opt.msg.idClient) {
@@ -159,8 +181,8 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public deleteAllLocalMsgs(opt: any): void {
-      super.deleteAllLocalMsgs({
+    public deleteAllLocalMsgs(opt: any): any {
+      return super.deleteAllLocalMsgs({
         ...opt,
         done: (err: any, obj: any) => {
           if (!err) {
@@ -171,8 +193,8 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public deleteMsgSelf(opt: any): void {
-      super.deleteMsgSelf({
+    public deleteMsgSelf(opt: any): any {
+      return super.deleteMsgSelf({
         ...opt,
         done: (err: any, obj: any) => {
           if (!err && opt.msg && opt.msg.idClient) {
@@ -183,8 +205,8 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public deleteMsgSelfBatch(opt: any): void {
-      super.deleteMsgSelf({
+    public deleteMsgSelfBatch(opt: any): any {
+      return super.deleteMsgSelf({
         ...opt,
         done: (err: any, obj: any) => {
           if (!err && opt.msgs && opt.msgs.length) {
@@ -196,8 +218,8 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public getLocalMsgsToFts(opt: any): void {
-      super.getLocalMsgs({
+    public getLocalMsgsToFts(opt: any): any {
+      return super.getLocalMsgs({
         ...opt,
         done: (err: any, obj: any) => {
           if (!err) {
@@ -208,14 +230,12 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    public async queryFts(text: string, limit = 100): Promise<any> {
-      const searchParams = this._cut(text)
+    public async queryFts(params: IQueryParams): Promise<any> {
       try {
-        const records = await this.searchDB.QUERY({
-          SEARCH: searchParams,
-        })
+        const { queryParams, queryOptions } = this._handleQueryParams(params)
+        const records = await this.searchDB.QUERY(queryParams, queryOptions)
         this.logFunc('queryFts searchDB QUERY success', records)
-        const idClients = records.RESULT.map((item) => item._id).slice(0, limit)
+        const idClients = records.RESULT.map((item) => item._id)
         if (!idClients || !idClients.length) {
           this.logFunc('queryFts 查询本地消息，无匹配词')
           throw '查询本地消息，无匹配词'
@@ -229,18 +249,22 @@ const fullText = (NimSdk: any) => {
       }
     }
 
-    public async putFts(msgs: Msg | Msg[]): Promise<void> {
+    public async putFts(msgs: IMsg | IMsg[]): Promise<void> {
       if (Object.prototype.toString.call(msgs) !== '[object Array]') {
         msgs = [msgs]
       }
-      // 分词，并过滤无意义的符号
-      const fts = msgs
+      const fts: ISiItem[] = []
+      msgs
         .filter((msg) => msg.text && msg.idClient)
-        .map((msg) => ({
-          idx: this._cut(msg.text),
-          _id: msg.idClient,
-        }))
-
+        .forEach((msg) => {
+          const temp: ISiItem[] = this._cut(msg.text).map((txt) => ({
+            _id: msg.idClient,
+            idx: txt,
+            time: msg.time,
+            sessionId: msg.sessionId.replace('-', ''), // search-index 不支持中间带有-
+          }))
+          fts.push(...temp)
+        })
       try {
         await this.searchDB.PUT(fts)
         this.logFunc('putFts success', fts)
@@ -301,11 +325,87 @@ const fullText = (NimSdk: any) => {
       })
     }
 
+    // 处理QUERY参数
+    _handleQueryParams({
+      text,
+      sessionIds,
+      timeDirection,
+      limit = 100,
+      start,
+      end,
+      textLogic = 'and',
+      sessionIdLogic = 'or',
+    }: IQueryParams): { queryParams: any; queryOptions: any } {
+      const cutItem = (this._cut(text) || []).map((item) => `idx:${item}`)
+      const queryParams =
+        textLogic === 'and'
+          ? { SEARCH: cutItem }
+          : { SEARCH: [{ OR: cutItem }] }
+      if (sessionIds && sessionIds.length) {
+        const sessionIdItem = sessionIds.map(
+          (sid) => `sessionId:${sid.replace('-', '')}` // search-index 不支持中间带有-
+        )
+        if (sessionIdLogic === 'or') {
+          // @ts-ignore
+          queryParams.SEARCH.push({
+            OR: sessionIdItem,
+          })
+        } else if (sessionIdLogic === 'and') {
+          // @ts-ignore
+          queryParams.SEARCH.push(...sessionIdItem)
+        }
+      }
+
+      const queryOptions: { PAGE: any; SORT?: any } = {
+        PAGE: {
+          NUMBER: 0,
+          SIZE: limit,
+        },
+      }
+      if (timeDirection || start || end) {
+        // 按照时间排序，search-index需要先查询时加入time字段
+        const timeItem: any = { FIELD: 'time' }
+        if (start !== undefined) {
+          timeItem.VALUE = {
+            GTE: this._fillTimeString(start),
+          }
+        }
+        if (end !== undefined) {
+          timeItem.VALUE = {
+            ...timeItem.VALUE,
+            LTE: this._fillTimeString(end),
+          }
+        }
+        queryParams.SEARCH.push(timeItem as any)
+        if (timeDirection) {
+          queryOptions.SORT = {
+            TYPE: 'NUMERIC',
+            DIRECTION: timeDirection === 'descend' ? 'DESCENDING' : 'ASCENDING',
+            FIELD: '_match.time',
+          }
+        }
+      }
+
+      this.logFunc('_handleQueryParams: ', { queryParams, queryOptions })
+      return { queryParams, queryOptions }
+    }
+
     // 分词函数
     _cut(text: string): string[] {
       return nodejieba
         .cut(text)
         .filter((word) => !this.ignoreChars.includes(word))
+    }
+
+    // 补齐时间戳，用以满足search-index的RANGE，参见issue: https://github.com/fergiemcdowall/search-index/issues/542
+    _fillTimeString(t: number): string {
+      // 理论上13位已经是一个很长的时间范围了
+      const maxLength = 13
+      let _t = t + ''
+      if (_t.length < maxLength) {
+        _t = _t.padStart(maxLength, '0')
+      }
+      return _t
     }
 
     public static async getInstance(initOpt: IInitOpt): Promise<any> {

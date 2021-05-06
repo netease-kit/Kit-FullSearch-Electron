@@ -103,13 +103,35 @@ const end = start + 7 * 24 * 60 * 60 * 1000
 handler(start, end)
 ```
 
-#### queryFts(text: string, limit?: number): Promise<any>
+#### queryFts(params: IQueryParams): Promise<any>
+
+参数说明
+
+```typescript
+type IDirection = 'ascend' | 'descend'
+
+type ILogic = 'and' | 'or'
+
+interface IQueryParams {
+  text: string // 搜索关键字
+  limit?: number // 查询条数，默认100
+  sessionIds?: string[] // 查询的sessionId数组，默认空数组
+  timeDirection?: IDirection // 查询结果是否根据时间排序，不传按照默认打分排序
+  start?: number // 开始查询的起点时间戳
+  end?: number // 开始查询的终点时间戳
+  textLogic?: ILogic // 关键字分词后的查询逻辑，默认and
+  sessionIdLogic?: ILogic // 多个sessionId的查询逻辑，默认or
+}
+```
 
 根据关键字进行全文检索，返回查询的结果
 
 ```js
 nim
-  .queryFts('hello', 100)
+  .queryFts({
+    text: 'hello',
+    limit: 100,
+  })
   .then((res) => {
     console.log('查询成功: ', res)
   })
@@ -154,7 +176,7 @@ nim
 
 ```js
 nim
-  .clearAllFts(_ids)
+  .clearAllFts()
   .then((res) => {
     console.log('清空成功: ', res)
   })
