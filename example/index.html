@@ -25,9 +25,50 @@
     </div>
     <div>
       <h3>根据关键字全文搜索 queryFts</h3>
-      <input id="q-keyword" type="text" placeholder="关键字" />
-      <input id="q-number" type="number" placeholder="条数，默认100" />
-      <button class="j-query-fulltext">查询</button>
+      <div>
+        <span>关键字</span>
+        <input id="q-keyword" type="text" placeholder="关键字" />
+      </div>
+      <div>
+        <span>sessionIds</span>
+        <input id="q-sessionId" type="text" placeholder="选填，多个用,分割" />
+      </div>
+      <div>
+        <span>查询条数</span>
+        <input id="q-number" type="number" placeholder="默认100" />
+      </div>
+      <div>
+        <span>时间排序</span>
+        <select id="q-sort">
+          <option value="">不使用时间排序</option>
+          <option value="ascend">升序</option>
+          <option value="descend">降序</option>
+        </select>
+      </div>
+      <div>
+        时间范围
+        <span>开始时间</span>
+        <input id="q-start" type="text" placeholder="2021-4-27 10:12:11" />
+        <span>结束时间</span>
+        <input id="q-end" type="text" placeholder="2021-4-27 12:12:11" />
+      </div>
+      <div>
+        <span>关键字分词后的查询逻辑</span>
+        <select id="q-textLogic">
+          <option value="and">and</option>
+          <option value="or">or</option>
+        </select>
+      </div>
+      <div>
+        <span>多个sessionId的查询逻辑</span>
+        <select id="q-sessionIdLogic">
+          <option value="or">or</option>
+          <option value="and">and</option>
+        </select>
+      </div>
+      <div>
+        <button class="j-query-fulltext">查询</button>
+      </div>
     </div>
     <div>
       <h3>发送消息 sendText</h3>

@@ -136,10 +136,15 @@ class Test {
     for (let i = 0; i < num; i++) {
       let temp = Mock.mock(this.obj)
       text = text || Mock.Random.cparagraph(2, 10)
-      fts.push({
-        _id: temp.idClient,
-        idx: window.nim._cut(text),
-      })
+
+      fts.push(
+        ...window.nim._cut(text).map((txt) => ({
+          _id: temp.idClient,
+          idx: txt,
+          sessionId: temp.sessionId.replace('-', ''),
+          time: temp.time,
+        }))
+      )
       objectStore.add({
         ...temp,
         text,

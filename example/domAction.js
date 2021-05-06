@@ -39,22 +39,45 @@ window.onload = (function () {
     }
     // 全文搜索
     else if (hasClass(target, 'j-query-fulltext')) {
-      const $keyword = $('#q-keyword')
-      const $number = $('#q-number')
-      const text = $keyword.value
-      const number = $number.value || undefined
-      if (!text) {
-        alert('请输入查询的关键字')
+      const text = $('#q-keyword').value
+      const number = $('#q-number').value || undefined
+      const sessionIds = $('#q-sessionId').value || undefined
+      const sort = $('#q-sort').value || undefined
+      const textLogic = $('#q-textLogic').value
+      const sessionIdLogic = $('#q-sessionIdLogic').value
+      let start = $('#q-start').value
+      let end = $('#q-end').value
+      if (!text && !sessionIds) {
+        alert('请输入查询的关键字或sessionId')
         return
       }
+      start = start
+        ? start.includes('-')
+          ? new Date(start).getTime()
+          : start * 1
+        : undefined
+      end = end
+        ? end.includes('-')
+          ? new Date(end).getTime()
+          : end * 1
+        : undefined
       if (window.nim) {
-        const start = performance.now()
+        const _start = performance.now()
         window.nim
-          .queryFts(text, number)
+          .queryFts({
+            text,
+            sessionIds: sessionIds ? sessionIds.split(',') : [],
+            limit: number,
+            timeDirection: sort,
+            start,
+            end,
+            textLogic,
+            sessionIdLogic,
+          })
           .then((res) => {
-            const end = performance.now()
-            console.log(TAG_NAME, `查询成功，耗时: ${end - start} ms`, res)
-            alert(`查询成功，耗时: ${end - start} ms`)
+            const _end = performance.now()
+            console.log(TAG_NAME, `查询成功，耗时: ${_end - _start} ms`, res)
+            alert(`查询成功，耗时: ${_end - _start} ms`)
           })
           .catch((err) => {
             console.error(TAG_NAME, '查询失败：', err)
