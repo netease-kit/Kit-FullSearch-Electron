@@ -34,6 +34,10 @@
         <input id="q-sessionId" type="text" placeholder="选填，多个用,分割" />
       </div>
       <div>
+        <span>froms</span>
+        <input id="q-froms" type="text" placeholder="选填，多个用,分割" />
+      </div>
+      <div>
         <span>查询条数</span>
         <input id="q-number" type="number" placeholder="默认100" />
       </div>
@@ -62,6 +66,13 @@
       <div>
         <span>多个sessionId的查询逻辑</span>
         <select id="q-sessionIdLogic">
+          <option value="or">or</option>
+          <option value="and">and</option>
+        </select>
+      </div>
+      <div>
+        <span>多个froms的查询逻辑</span>
+        <select id="q-fromsLogic">
           <option value="or">or</option>
           <option value="and">and</option>
         </select>

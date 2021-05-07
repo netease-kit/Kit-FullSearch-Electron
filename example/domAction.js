@@ -42,13 +42,15 @@ window.onload = (function () {
       const text = $('#q-keyword').value
       const number = $('#q-number').value || undefined
       const sessionIds = $('#q-sessionId').value || undefined
+      const froms = $('#q-froms').value || undefined
       const sort = $('#q-sort').value || undefined
       const textLogic = $('#q-textLogic').value
       const sessionIdLogic = $('#q-sessionIdLogic').value
+      const fromsLogic = $('#q-fromsLogic').value
       let start = $('#q-start').value
       let end = $('#q-end').value
-      if (!text && !sessionIds) {
-        alert('请输入查询的关键字或sessionId')
+      if (!text && !sessionIds && !froms) {
+        alert('请输入查询的 关键字 或 sessionId 或 froms')
         return
       }
       start = start
@@ -67,12 +69,14 @@ window.onload = (function () {
           .queryFts({
             text,
             sessionIds: sessionIds ? sessionIds.split(',') : [],
+            froms: froms ? froms.split(',') : [],
             limit: number,
             timeDirection: sort,
             start,
             end,
             textLogic,
             sessionIdLogic,
+            fromsLogic,
           })
           .then((res) => {
             const _end = performance.now()

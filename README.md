@@ -51,7 +51,7 @@ NIM.getInstance({
 - `ignoreChars?: string` 需要过滤掉的无意义的词，不传使用内置的过滤词
 - `searchDBName?: string` 本地 searchDB 的 name，用于初始化不同的 searchDB，有默认前缀 `NIM-FULLTEXT-SEARCHDB-`，后缀不传则使用 account 加 appKey 的组合
 - `searchDBPath?: string` 本地 searchDB 的存储目录，默认项目目录
-- `logFunc?: (...args: any) => void` 日志方法，不传使用内置的日志方法
+- `ftLogFunc?: (...args: any) => void` 日志方法，不传使用内置的日志方法
 
 ### 新增实例方法
 
@@ -115,12 +115,14 @@ type ILogic = 'and' | 'or'
 interface IQueryParams {
   text: string // 搜索关键字
   limit?: number // 查询条数，默认100
-  sessionIds?: string[] // 查询的sessionId数组，默认空数组
+  sessionIds?: string[] // 查询的sessionId数组
+  froms?: string[] // 查询的发送人from的数组
   timeDirection?: IDirection // 查询结果是否根据时间排序，不传按照默认打分排序
   start?: number // 开始查询的起点时间戳
   end?: number // 开始查询的终点时间戳
   textLogic?: ILogic // 关键字分词后的查询逻辑，默认and
   sessionIdLogic?: ILogic // 多个sessionId的查询逻辑，默认or
+  fromsLogic?: ILogic // 多个froms的查询逻辑，默认or
 }
 ```
 
