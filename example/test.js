@@ -141,7 +141,8 @@ class Test {
         ...window.nim._cut(text).map((txt) => ({
           _id: temp.idClient,
           idx: txt,
-          sessionId: temp.sessionId.replace('-', ''),
+          sessionId: window.nim._filterAccountChar(temp.sessionId),
+          from: window.nim._filterAccountChar(temp.from),
           time: temp.time,
         }))
       )

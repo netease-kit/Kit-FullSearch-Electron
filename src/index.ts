@@ -27,7 +27,7 @@ export interface IInitOpt {
   ignoreChars?: string
   searchDBName?: string
   searchDBPath?: string
-  logFunc?: (...args: any) => void
+  ftLogFunc?: (...args: any) => void
   debug?: boolean
   [key: string]: any
 }
@@ -40,11 +40,13 @@ export interface IQueryParams {
   text: string
   limit?: number
   sessionIds?: string[]
+  froms?: string[]
   timeDirection?: IDirection
   start?: number
   end?: number
   textLogic?: ILogic
   sessionIdLogic?: ILogic
+  fromsLogic?: ILogic
 }
 
 export interface IMsg {
@@ -66,7 +68,7 @@ const fullText = (NimSdk: any) => {
   return class FullTextNim extends NimSdk implements IFullTextNim {
     public static instance: FullTextNim | null
     searchDB: any
-    logFunc: (...args: any) => void
+    ftLogFunc: (...args: any) => void
     ignoreChars: string
     searchDBName: string
     searchDBPath: string
@@ -81,20 +83,23 @@ const fullText = (NimSdk: any) => {
         searchDBName,
         searchDBPath,
         debug,
-        logFunc,
+        ftLogFunc,
       } = initOpt
 
       // 初始化logger
       if (debug) {
-        this.logFunc = logFunc || logger.log.bind(logger)
+        this.ftLogFunc = logger.log.bind(logger)
       } else {
-        this.logFunc = (): void => {
+        this.ftLogFunc = (): void => {
           // i'm empty
         }
       }
+      if (ftLogFunc) {
+        this.ftLogFunc = ftLogFunc
+      }
 
       if (!account || !appKey) {
-        this.logFunc('invalid init params!')
+        this.ftLogFunc('invalid init params!')
         throw new Error('invalid init params!')
       }
       this.ignoreChars =
@@ -114,9 +119,9 @@ const fullText = (NimSdk: any) => {
           // @ts-ignore
           storeVectors: true,
         })
-        this.logFunc('initDB success')
+        this.ftLogFunc('initDB success')
       } catch (err) {
-        this.logFunc('initDB fail: ', err)
+        this.ftLogFunc('initDB fail: ', err)
         return Promise.reject(err)
       }
     }
@@ -234,17 +239,17 @@ const fullText = (NimSdk: any) => {
       try {
         const { queryParams, queryOptions } = this._handleQueryParams(params)
         const records = await this.searchDB.QUERY(queryParams, queryOptions)
-        this.logFunc('queryFts searchDB QUERY success', records)
+        this.ftLogFunc('queryFts searchDB QUERY success', records)
         const idClients = records.RESULT.map((item) => item._id)
         if (!idClients || !idClients.length) {
-          this.logFunc('queryFts 查询本地消息，无匹配词')
+          this.ftLogFunc('queryFts 查询本地消息，无匹配词')
           throw '查询本地消息，无匹配词'
         }
         const res = await this._getLocalMsgsByIdClients(idClients)
-        this.logFunc('queryFts success')
+        this.ftLogFunc('queryFts success')
         return res
       } catch (error) {
-        this.logFunc('queryFts fail: ', error)
+        this.ftLogFunc('queryFts fail: ', error)
         return Promise.reject(error)
       }
     }
@@ -261,15 +266,16 @@ const fullText = (NimSdk: any) => {
             _id: msg.idClient,
             idx: txt,
             time: msg.time,
-            sessionId: msg.sessionId.replace('-', ''), // search-index 不支持中间带有-
+            sessionId: this._filterAccountChar(msg.sessionId),
+            froms: this._filterAccountChar(msg.from),
           }))
           fts.push(...temp)
         })
       try {
         await this.searchDB.PUT(fts)
-        this.logFunc('putFts success', fts)
+        this.ftLogFunc('putFts success', fts)
       } catch (error) {
-        this.logFunc('putFts fail: ', error)
+        this.ftLogFunc('putFts fail: ', error)
         return Promise.reject(error)
       }
     }
@@ -280,9 +286,9 @@ const fullText = (NimSdk: any) => {
       }
       try {
         await this.searchDB.DELETE(ids)
-        this.logFunc('deleteFts success', ids)
+        this.ftLogFunc('deleteFts success', ids)
       } catch (error) {
-        this.logFunc('deleteFts fail: ', error)
+        this.ftLogFunc('deleteFts fail: ', error)
         return Promise.reject(error)
       }
     }
@@ -290,9 +296,9 @@ const fullText = (NimSdk: any) => {
     public async clearAllFts(): Promise<void> {
       try {
         await this.searchDB.FLUSH()
-        this.logFunc('clearAllFts success')
+        this.ftLogFunc('clearAllFts success')
       } catch (error) {
-        this.logFunc('clearAllFts fail: ', error)
+        this.ftLogFunc('clearAllFts fail: ', error)
         return Promise.reject(error)
       }
     }
@@ -300,10 +306,10 @@ const fullText = (NimSdk: any) => {
     public destroy(...args: any): void {
       this.searchDB.INDEX.STORE.close()
         .then(() => {
-          this.logFunc('close searchDB success')
+          this.ftLogFunc('close searchDB success')
         })
         .catch((error) => {
-          this.logFunc('close searchDB fail: ', error)
+          this.ftLogFunc('close searchDB fail: ', error)
         })
       FullTextNim.instance = null
       super.destroy(...args)
@@ -315,10 +321,10 @@ const fullText = (NimSdk: any) => {
           idClients,
           done: (err: any, obj: any) => {
             if (err) {
-              this.logFunc('_getLocalMsgsByIdClients fail: ', err)
+              this.ftLogFunc('_getLocalMsgsByIdClients fail: ', err)
               return reject(err)
             }
-            this.logFunc('_getLocalMsgsByIdClients success', obj)
+            this.ftLogFunc('_getLocalMsgsByIdClients success', obj)
             resolve(obj)
           },
         })
@@ -329,12 +335,14 @@ const fullText = (NimSdk: any) => {
     _handleQueryParams({
       text,
       sessionIds,
+      froms,
       timeDirection,
       limit = 100,
       start,
       end,
       textLogic = 'and',
       sessionIdLogic = 'or',
+      fromsLogic = 'or',
     }: IQueryParams): { queryParams: any; queryOptions: any } {
       const cutItem = (this._cut(text) || []).map((item) => `idx:${item}`)
       const queryParams =
@@ -343,7 +351,7 @@ const fullText = (NimSdk: any) => {
           : { SEARCH: [{ OR: cutItem }] }
       if (sessionIds && sessionIds.length) {
         const sessionIdItem = sessionIds.map(
-          (sid) => `sessionId:${sid.replace('-', '')}` // search-index 不支持中间带有-
+          (sid) => `sessionId:${this._filterAccountChar(sid)}`
         )
         if (sessionIdLogic === 'or') {
           // @ts-ignore
@@ -353,6 +361,21 @@ const fullText = (NimSdk: any) => {
         } else if (sessionIdLogic === 'and') {
           // @ts-ignore
           queryParams.SEARCH.push(...sessionIdItem)
+        }
+      }
+
+      if (froms && froms.length) {
+        const fromItem = froms.map(
+          (from) => `from:${this._filterAccountChar(from)}`
+        )
+        if (fromsLogic === 'or') {
+          // @ts-ignore
+          queryParams.SEARCH.push({
+            OR: fromItem,
+          })
+        } else if (fromsLogic === 'and') {
+          // @ts-ignore
+          queryParams.SEARCH.push(...fromItem)
         }
       }
 
@@ -386,7 +409,7 @@ const fullText = (NimSdk: any) => {
         }
       }
 
-      this.logFunc('_handleQueryParams: ', { queryParams, queryOptions })
+      this.ftLogFunc('_handleQueryParams: ', { queryParams, queryOptions })
       return { queryParams, queryOptions }
     }
 
@@ -406,6 +429,11 @@ const fullText = (NimSdk: any) => {
         _t = _t.padStart(maxLength, '0')
       }
       return _t
+    }
+
+    // 过滤account和sessionId中的符号，因为search-index 不支持符号
+    _filterAccountChar(text: string): string {
+      return text.replace(/[\-\.\_\@]/g, 'ft')
     }
 
     public static async getInstance(initOpt: IInitOpt): Promise<any> {
