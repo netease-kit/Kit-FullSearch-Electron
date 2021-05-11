@@ -5,7 +5,7 @@
 ## 安装
 
 ```bash
-$ npm install kit-fullsearch-electron nodejieba search-index -S
+$ npm install kit-fullsearch-electron search-index -S
 ```
 
 ## 使用
@@ -52,6 +52,7 @@ NIM.getInstance({
 - `searchDBName?: string` 本地 searchDB 的 name，用于初始化不同的 searchDB，有默认前缀 `NIM-FULLTEXT-SEARCHDB-`，后缀不传则使用 account 加 appKey 的组合
 - `searchDBPath?: string` 本地 searchDB 的存储目录，默认项目目录
 - `ftLogFunc?: (...args: any) => void` 日志方法，不传使用内置的日志方法
+- `fullSearchCutFunc?: (text: string) => string[]` 自定义分词方法，不传使用默认内置的分词方法
 
 ### 新增实例方法
 
@@ -193,5 +194,4 @@ nim
 
 ## 相关库参考
 
-- [nodejieba](https://github.com/yanyiwu/nodejieba)
 - [search-index](https://github.com/fergiemcdowall/search-index)

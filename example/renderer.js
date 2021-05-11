@@ -1,6 +1,7 @@
 const fullText = require('../lib/index').default
 const SDK = require('./sdk/NIM_Web_SDK_v8.3.0_test')
 const Test = require('./test')
+const nodejieba = require('nodejieba')
 
 const NIM = fullText(SDK.NIM)
 
@@ -21,6 +22,11 @@ NIM.getInstance({
   reconnectionDelay: 1000, // 在第一次尝试重连之前最初等待多长时间
   reconnectionDelayMax: 60000, // 重新连接之间等待的最大时间
   reconnectionJitter: 0, // 重连等待时间振荡值
+
+  // 自定义分词函数
+  // fullSearchCutFunc: (text) => {
+  //   return nodejieba.cut(text)
+  // },
 
   onconnect(obj) {
     console.log(TAG_NAME, '连接建立成功', obj)

@@ -1,6 +1,6 @@
 {
   "name": "kit-fullsearch-electron",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "全文搜索组件，基于网易云信web端im sdk，用于Electron",
   "main": "lib/index.js",
   "module": "lib/index.js",
@@ -13,7 +13,6 @@
     "Electron",
     "fulltext",
     "search-index",
-    "nodejieba",
     "Netease",
     "yunxin",
     "im"
@@ -46,11 +45,9 @@
     "rollup-plugin-terser": "^7.0.2",
     "rollup-plugin-typescript2": "^0.30.0",
     "typescript": "^4.1.5",
-    "nodejieba": "^2.5.1",
     "search-index": "^2.3.0"
   },
   "peerDependencies": {
-    "nodejieba": "^2.5.1",
     "search-index": "^2.3.0"
   }
 }

@@ -134,5 +134,26 @@ window.onload = (function () {
             alert('清空失败！')
           })
     }
+    // 同步消息
+    else if (hasClass(target, 'j-sync')) {
+      console.time('getLocalMsgsToFts')
+      window.nim &&
+        window.nim.getLocalMsgsToFts({
+          start: 0, // 起点
+          end: Date.now(), // 终点
+          desc: false, // 从start开始查
+          types: ['text', 'custom'], // 只针对文本消息和自定义消息
+          limit: 10000,
+          done(error, obj) {
+            console.log(
+              '获取并同步本地消息' + (!error ? '成功' : '失败'),
+              error,
+              obj,
+              obj.msgs.length
+            )
+            console.timeEnd('getLocalMsgsToFts')
+          },
+        })
+    }
   })
 })()

@@ -1,6 +1,6 @@
 import { logger } from './logger'
+import { queuePromise } from './utils'
 
-const nodejieba = require('nodejieba')
 const si = require('search-index')
 
 export interface IFullTextNim {
@@ -24,11 +24,12 @@ export interface IFullTextNim {
 export interface IInitOpt {
   account: string
   appKey: string
+  debug?: boolean
   ignoreChars?: string
   searchDBName?: string
   searchDBPath?: string
   ftLogFunc?: (...args: any) => void
-  debug?: boolean
+  fullSearchCutFunc?: (text: string) => string[]
   [key: string]: any
 }
 
@@ -72,6 +73,9 @@ const fullText = (NimSdk: any) => {
     ignoreChars: string
     searchDBName: string
     searchDBPath: string
+    fullSearchCutFunc?: (text: string) => string[]
+    // 内部使用，对putFts做了并发保护
+    _putFts = queuePromise(this.putFts)
 
     constructor(initOpt: IInitOpt) {
       super(initOpt)
@@ -84,6 +88,7 @@ const fullText = (NimSdk: any) => {
         searchDBPath,
         debug,
         ftLogFunc,
+        fullSearchCutFunc,
       } = initOpt
 
       // 初始化logger
@@ -107,6 +112,9 @@ const fullText = (NimSdk: any) => {
         ' \t\r\n~!@#$%^&*()_+-=【】、{}|;\':"，。、《》？αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ。，、；：？！…—·ˉ¨‘’“”々～‖∶＂＇｀｜〃〔〕〈〉《》「」『』．〖〗【】（）［］｛｝ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩⅪⅫ⒈⒉⒊⒋⒌⒍⒎⒏⒐⒑⒒⒓⒔⒕⒖⒗⒘⒙⒚⒛㈠㈡㈢㈣㈤㈥㈦㈧㈨㈩①②③④⑤⑥⑦⑧⑨⑩⑴⑵⑶⑷⑸⑹⑺⑻⑼⑽⑾⑿⒀⒁⒂⒃⒄⒅⒆⒇≈≡≠＝≤≥＜＞≮≯∷±＋－×÷／∫∮∝∞∧∨∑∏∪∩∈∵∴⊥∥∠⌒⊙≌∽√§№☆★○●◎◇◆□℃‰€■△▲※→←↑↓〓¤°＃＆＠＼︿＿￣―♂♀┌┍┎┐┑┒┓─┄┈├┝┞┟┠┡┢┣│┆┊┬┭┮┯┰┱┲┳┼┽┾┿╀╁╂╃└┕┖┗┘┙┚┛━┅┉┤┥┦┧┨┩┪┫┃┇┋┴┵┶┷┸┹┺┻╋╊╉╈╇╆╅╄'
       this.searchDBName = searchDBName || `${account}-${appKey}`
       this.searchDBPath = searchDBPath || ''
+      if (fullSearchCutFunc) {
+        this.fullSearchCutFunc = fullSearchCutFunc
+      }
     }
 
     public async initDB(): Promise<void> {
@@ -131,7 +139,7 @@ const fullText = (NimSdk: any) => {
         ...opt,
         done: (err: any, obj: any) => {
           if (!err && obj.idClient) {
-            this.putFts(obj)
+            this._putFts(obj)
           }
           opt.done && opt.done(err, obj)
         },
@@ -143,7 +151,7 @@ const fullText = (NimSdk: any) => {
         ...opt,
         done: (err: any, obj: any) => {
           if (!err && obj.idClient) {
-            this.putFts(obj)
+            this._putFts(obj)
           }
           opt.done && opt.done(err, obj)
         },
@@ -155,7 +163,7 @@ const fullText = (NimSdk: any) => {
         ...opt,
         done: (err: any, obj: any) => {
           if (!err) {
-            this.putFts(obj)
+            this._putFts(obj)
           }
           opt.done && opt.done(err, obj)
         },
@@ -211,7 +219,7 @@ const fullText = (NimSdk: any) => {
     }
 
     public deleteMsgSelfBatch(opt: any): any {
-      return super.deleteMsgSelf({
+      return super.deleteMsgSelfBatch({
         ...opt,
         done: (err: any, obj: any) => {
           if (!err && opt.msgs && opt.msgs.length) {
@@ -228,7 +236,7 @@ const fullText = (NimSdk: any) => {
         ...opt,
         done: (err: any, obj: any) => {
           if (!err) {
-            this.putFts(obj.msgs)
+            this._putFts(obj.msgs)
           }
           opt.done && opt.done(err, obj)
         },
@@ -415,9 +423,13 @@ const fullText = (NimSdk: any) => {
 
     // 分词函数
     _cut(text: string): string[] {
-      return nodejieba
-        .cut(text)
-        .filter((word) => !this.ignoreChars.includes(word))
+      let res: string[]
+      if (this.fullSearchCutFunc) {
+        res = this.fullSearchCutFunc(text)
+      } else {
+        res = text.split('')
+      }
+      return res.filter((word) => !this.ignoreChars.includes(word))
     }
 
     // 补齐时间戳，用以满足search-index的RANGE，参见issue: https://github.com/fergiemcdowall/search-index/issues/542
@@ -448,15 +460,15 @@ const fullText = (NimSdk: any) => {
       return NimSdk.getInstance({
         ...initOpt,
         onroamingmsgs: (...args: any) => {
-          this.instance?.putFts(args[0])
+          this.instance?._putFts(args[0])
           initOpt.onroamingmsgs && initOpt.onroamingmsgs(...args)
         },
         onofflinemsgs: (...args: any) => {
-          this.instance?.putFts(args[0])
+          this.instance?._putFts(args[0])
           initOpt.onofflinemsgs && initOpt.onofflinemsgs(...args)
         },
         onmsg: (...args: any) => {
-          this.instance?.putFts(args[0])
+          this.instance?._putFts(args[0])
           initOpt.onmsg && initOpt.onmsg(...args)
         },
       })
