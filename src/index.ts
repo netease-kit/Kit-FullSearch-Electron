@@ -275,7 +275,7 @@ const fullText = (NimSdk: any) => {
             idx: txt,
             time: msg.time,
             sessionId: this._filterAccountChar(msg.sessionId),
-            froms: this._filterAccountChar(msg.from),
+            from: this._filterAccountChar(msg.from),
           }))
           fts.push(...temp)
         })
