@@ -6,3 +6,4 @@ junit.xml
 .vscode
 .DS_Store
 NIM-FULLTEXT-SEARCHDB-*
+example/*.sqlite*

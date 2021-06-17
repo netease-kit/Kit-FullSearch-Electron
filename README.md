@@ -4,9 +4,13 @@
 
 ## 安装
 
+前置依赖
+
 ```bash
-$ npm install kit-fullsearch-electron search-index -S
+$ npm install kit-fullsearch-electron sqlite3
 ```
+
+采用 sqlite fts5 extension，默认的 sqlite3 并不支持中文分词，故而使用者需要把编译好的 /example/tokenizer 分词文件夹放入主工程根目录下。
 
 ## 使用
 
@@ -28,6 +32,8 @@ NIM.getInstance({
 })
 ```
 
+测试发现在 electron 调试页面连续刷新可能会导致这个 then 没有被触发，因为加载 dll 似乎在调试阶段有点毛病。。
+
 组件扩展了以下 nim 的方法，会自动将数据分词后同步到本地的 searchDB。使用组件后，新消息组件会自动同步到 searchDB，历史消息需要通过使用者主动调用 `nim.getLocalMsgsToFts` 来同步到 searchDB 中。
 
 - `onroamingmsgs`
@@ -48,11 +54,9 @@ NIM.getInstance({
 
 以下方法为新增的初始化参数，可以用于在调用 `NIM.getInstance` 时传入
 
-- `ignoreChars?: string` 需要过滤掉的无意义的词，不传使用内置的过滤词
 - `searchDBName?: string` 本地 searchDB 的 name，用于初始化不同的 searchDB，有默认前缀 `NIM-FULLTEXT-SEARCHDB-`，后缀不传则使用 account 加 appKey 的组合
 - `searchDBPath?: string` 本地 searchDB 的存储目录，默认项目目录
 - `ftLogFunc?: (...args: any) => void` 日志方法，不传使用内置的日志方法
-- `fullSearchCutFunc?: (text: string) => string[]` 自定义分词方法，不传使用默认内置的分词方法
 
 ### 新增实例方法
 
@@ -73,35 +77,37 @@ nim.getLocalMsgsToFts({
 })
 ```
 
-如果本地数据量较大，一次性同步所有数据并存入 searchDB 可能会导致性能问题。因此，在这种场景下，建议使用者自行控制调用该方法的时机。
-以下是一个递归调用的例子
+如果本地数据量较大，参考 example 下的办法
 
 ```js
-const handler = (start, end) => {
-  if (start < Date.now()) {
-    nim.getLocalMsgsToFts({
-      start, // 起点
-      end, // 终点
-      desc: false, // 从start开始查
-      types: ['text', 'custom'], // 只针对文本消息和自定义消息
-      done: getLocalMsgsToFtsDone,
-    })
-
-    function getLocalMsgsToFtsDone(error, obj) {
-      console.log('获取并同步本地消息' + (!error ? '成功' : '失败'), error, obj)
-      if (!error) {
-        const newStart = end + 24 * 60 * 60 * 1000 // 取上一次执行结束的时间的后一天作为新一轮查询的起点
-        const newEnd = newStart + 7 * 24 * 60 * 60 * 1000 // 取下一轮7天内的数据
-        handler(newStart, newEnd)
-      }
-    }
+function doSyncOneYear(order = 0) {
+  if (order === 12) {
+    return;
   }
+  const aYearAgo = new Date().getTime() - 31536000000;
+  const aMonth = 2592000000;
+  const start = aYearAgo + (order * aMonth)
+  const end = start + aMonth
+  console.time('getLocalMsgsToFts')
+  window.nim.getLocalMsgsToFts({
+    start: start, // 起点
+    end: end, // 终点
+    desc: false, // 从start开始查
+    types: ['text', 'custom'], // 只针对文本消息和自定义消息
+    limit: Infinity,
+    done(error, obj) {
+      console.log(
+        '获取并同步本地消息' + (!error ? '成功' : '失败'),
+        error,
+        '开始时间 ' + new Date(start),
+        '结束时间 ' + new Date(end),
+        '共 ' + obj.msgs && obj.msgs.length + ' 条'
+      )
+      console.timeEnd('getLocalMsgsToFts')
+      doSyncOneYear(order + 1)
+    },
+  })
 }
-
-// 从30天前开始查，每次查询7天
-const start = Date.now() - 30 * 24 * 60 * 60 * 1000
-const end = start + 7 * 24 * 60 * 60 * 1000
-handler(start, end)
 ```
 
 #### queryFts(params: IQueryParams): Promise<any>
@@ -111,7 +117,6 @@ handler(start, end)
 ```typescript
 type IDirection = 'ascend' | 'descend'
 
-type ILogic = 'and' | 'or'
 
 interface IQueryParams {
   text: string // 搜索关键字
@@ -121,9 +126,6 @@ interface IQueryParams {
   timeDirection?: IDirection // 查询结果是否根据时间排序，不传按照默认打分排序
   start?: number // 开始查询的起点时间戳
   end?: number // 开始查询的终点时间戳
-  textLogic?: ILogic // 关键字分词后的查询逻辑，默认and
-  sessionIdLogic?: ILogic // 多个sessionId的查询逻辑，默认or
-  fromsLogic?: ILogic // 多个froms的查询逻辑，默认or
 }
 ```
 
@@ -145,7 +147,7 @@ nim
 
 #### putFts(msgs: Msg | Msg[]): Promise<void>
 
-新增以及修改 searchDB 中的数据
+新增以及修改 db 中的数据
 
 ```js
 nim
@@ -160,7 +162,7 @@ nim
 
 #### deleteFts(ids: string | string[]): Promise<void>
 
-根据 idClient 删除 searchDB 中的数据
+根据 idClient 删除 db 中的数据
 
 ```js
 nim
@@ -175,7 +177,7 @@ nim
 
 #### clearAllFts(): Promise<void>
 
-清除所有 searchDB 中的数据
+清除所有 db 中的数据
 
 ```js
 nim
@@ -191,7 +193,3 @@ nim
 ## 示例
 
 示例可以查看 `/example` 文件夹下的内容，[点击这里](example/README.md)进行快速跳转
-
-## 相关库参考
-
-- [search-index](https://github.com/fergiemcdowall/search-index)

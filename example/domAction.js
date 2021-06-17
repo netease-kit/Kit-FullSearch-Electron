@@ -34,19 +34,17 @@ window.onload = (function () {
       }
       if (window.test) {
         window.test.writeData(number, text)
-        alert('写入成功')
+        console.log('写入指令调用成功')
       }
     }
     // 全文搜索
     else if (hasClass(target, 'j-query-fulltext')) {
       const text = $('#q-keyword').value
-      const number = $('#q-number').value || undefined
-      const sessionIds = $('#q-sessionId').value || undefined
+      const limit = $('#q-limit').value || undefined
+      const offset = $('#q-offset').value || undefined
+      const sessionIds = $('#q-sessionIds').value || undefined
       const froms = $('#q-froms').value || undefined
       const sort = $('#q-sort').value || undefined
-      const textLogic = $('#q-textLogic').value
-      const sessionIdLogic = $('#q-sessionIdLogic').value
-      const fromsLogic = $('#q-fromsLogic').value
       let start = $('#q-start').value
       let end = $('#q-end').value
       if (!text && !sessionIds && !froms) {
@@ -70,13 +68,11 @@ window.onload = (function () {
             text,
             sessionIds: sessionIds ? sessionIds.split(',') : [],
             froms: froms ? froms.split(',') : [],
-            limit: number,
+            limit,
+            offset,
             timeDirection: sort,
             start,
             end,
-            textLogic,
-            sessionIdLogic,
-            fromsLogic,
           })
           .then((res) => {
             const _end = performance.now()
@@ -136,24 +132,43 @@ window.onload = (function () {
     }
     // 同步消息
     else if (hasClass(target, 'j-sync')) {
-      console.time('getLocalMsgsToFts')
-      window.nim &&
-        window.nim.getLocalMsgsToFts({
-          start: 0, // 起点
-          end: Date.now(), // 终点
-          desc: false, // 从start开始查
-          types: ['text', 'custom'], // 只针对文本消息和自定义消息
-          limit: 10000,
-          done(error, obj) {
-            console.log(
-              '获取并同步本地消息' + (!error ? '成功' : '失败'),
-              error,
-              obj,
-              obj.msgs.length
-            )
-            console.timeEnd('getLocalMsgsToFts')
-          },
-        })
+      if (window.nim && window.nim.getLocalMsgsToFts) {
+        doSyncOneYear();
+      } else {
+        console.error('无数据库')
+      }
+    }
+    else if (hasClass(target, 'j-write-indexdb')) {
+      window.test.writeDataInIndexDB(50000)
     }
   })
 })()
+
+function doSyncOneYear(order = 0) {
+  if (order === 24) {
+    return;
+  }
+  const aYearAgo = new Date().getTime() - 31536000000;
+  const aMonth = 2592000000;
+  const start = aYearAgo + (order * aMonth)
+  const end = start + aMonth
+  console.time('getLocalMsgsToFts')
+  window.nim.getLocalMsgsToFts({
+    start: start, // 起点
+    end: end, // 终点
+    desc: false, // 从start开始查
+    types: ['text', 'custom'], // 只针对文本消息和自定义消息
+    limit: Infinity,
+    done(error, obj) {
+      console.log(
+        '获取并同步本地消息' + (!error ? '成功' : '失败'),
+        error,
+        '开始时间 ' + new Date(start),
+        '结束时间 ' + new Date(end),
+        '共 ' + obj.msgs && obj.msgs.length + ' 条'
+      )
+      console.timeEnd('getLocalMsgsToFts')
+      doSyncOneYear(order + 1)
+    },
+  })
+}
