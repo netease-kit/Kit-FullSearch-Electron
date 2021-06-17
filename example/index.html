@@ -31,15 +31,19 @@
       </div>
       <div>
         <span>sessionIds</span>
-        <input id="q-sessionId" type="text" placeholder="选填，多个用,分割" />
+        <input id="q-sessionIds" type="text" placeholder="选填，多个用,分割" />
       </div>
       <div>
         <span>froms</span>
         <input id="q-froms" type="text" placeholder="选填，多个用,分割" />
       </div>
       <div>
-        <span>查询条数</span>
-        <input id="q-number" type="number" placeholder="默认100" />
+        <span>分页叶码limit</span>
+        <input id="q-limit" type="number" placeholder="默认100" />
+      </div>
+      <div>
+        <span>分页偏移量offset</span>
+        <input id="q-offset" type="number" placeholder="默认0" />
       </div>
       <div>
         <span>时间排序</span>
@@ -57,27 +61,6 @@
         <input id="q-end" type="text" placeholder="2021-4-27 12:12:11" />
       </div>
       <div>
-        <span>关键字分词后的查询逻辑</span>
-        <select id="q-textLogic">
-          <option value="and">and</option>
-          <option value="or">or</option>
-        </select>
-      </div>
-      <div>
-        <span>多个sessionId的查询逻辑</span>
-        <select id="q-sessionIdLogic">
-          <option value="or">or</option>
-          <option value="and">and</option>
-        </select>
-      </div>
-      <div>
-        <span>多个froms的查询逻辑</span>
-        <select id="q-fromsLogic">
-          <option value="or">or</option>
-          <option value="and">and</option>
-        </select>
-      </div>
-      <div>
         <button class="j-query-fulltext">查询</button>
       </div>
     </div>
@@ -88,7 +71,8 @@
     </div>
     <div>
       <h3>同步indexDB到search-index</h3>
-      <button class="j-sync">同步</button>
+      <button class="j-write-indexdb">只往 indexDB 写入 50000 条（20年到22年间）</button>
+      <button class="j-sync">同步最近两年</button>
     </div>
     <!-- <div>
       <h3>发送自定义消息 sendCustomMsg</h3>

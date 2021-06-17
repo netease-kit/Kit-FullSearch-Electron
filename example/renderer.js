@@ -1,7 +1,6 @@
 const fullText = require('../lib/index').default
 const SDK = require('./sdk/NIM_Web_SDK_v8.3.0_test')
 const Test = require('./test')
-const nodejieba = require('nodejieba')
 
 const NIM = fullText(SDK.NIM)
 
@@ -140,5 +139,6 @@ NIM.getInstance({
     console.log(TAG_NAME, 'onsyncdone')
   },
 }).then((nim) => {
+  console.log('then?')
   window.nim = nim
 })

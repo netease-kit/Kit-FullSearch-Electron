@@ -40,13 +40,13 @@ class Test {
       status: 'success',
       'target|1': ['cjhz1', 'wangsitu1', 'cs1', 'cs2', 'cs3', 'cs4'],
       text: Mock.Random.cparagraph(2, 10),
-      'time|1600000000000-1700000000000': 1,
+      'time|1577836800000-1640995200000': 1,
       'to|1': ['cjhz1', 'wangsitu1', 'cs1', 'cs2', 'cs3', 'cs4'],
       type: 'text',
       'userUpdateTime|1600000000000-1700000000000': 1,
     }
-    this.ignoreChars = window.nim.ignoreChars
-    this.searchDB = window.nim.searchDB
+    // this.ignoreChars = window.nim.ignoreChars
+    // this.searchDB = window.nim.searchDB
     this.request = window.indexedDB.open('nim-cs6')
     this.request.onerror = (event) => {
       console.log(TAG_NAME, '数据库打开报错', event)
@@ -109,12 +109,13 @@ class Test {
     console.time(TAG_NAME, 'readByKeyword last')
 
     // searchDB.INDEX.STORE.clear()  清除所有
-    const searchParams = window.nim._cut(text)
-    await this.searchDB
+    // const searchParams = window.nim._cut(text)
+    const result = await this.searchDB
       .QUERY({
-        SEARCH: searchParams,
+        text: text
       })
-      .then(console.log.bind(this, TAG_NAME))
+
+    console.log(result, TAG_NAME)
     console.timeEnd(TAG_NAME, 'readByKeyword last')
   }
 
@@ -123,7 +124,7 @@ class Test {
    * @param {Number} num
    * @param {String} text
    */
-  writeData(num = 100, text = '') {
+  async writeData(num = 100, text = '') {
     const transaction = this.db.transaction(['msg1'], 'readwrite')
     const objectStore = transaction.objectStore('msg1')
 
@@ -135,32 +136,31 @@ class Test {
 
     for (let i = 0; i < num; i++) {
       let temp = Mock.mock(this.obj)
-      text = text || Mock.Random.cparagraph(2, 10)
-
-      fts.push(
-        ...window.nim._cut(text).map((txt) => ({
-          _id: temp.idClient,
-          idx: txt,
-          sessionId: window.nim._filterAccountChar(temp.sessionId),
-          from: window.nim._filterAccountChar(temp.from),
-          time: temp.time,
-        }))
-      )
+      let txt = Mock.Random.cparagraph(2, 10)
+      // temp.idClient = 'Tua4jkM5cdg3Knkd7Qi1TqGDuiuZfGWh'
+      fts.push({
+        ...temp,
+        text: txt,
+      })
       objectStore.add({
         ...temp,
-        text,
+        text: txt,
         // terms: FullText.tokenize(temp.text, 'ch').filter(word => !this.ignoreChars.includes(word))
         // terms: window.nim._cut(temp.text).filter(word => !this.ignoreChars.includes(word))
       })
     }
 
-    this.searchDB.PUT(fts).then(() => {
-      console.log(
-        TAG_NAME,
-        'search-index save success, last: ',
-        new Date().getTime() - tempTime
-      )
-    })
+    console.time('插入FTS')
+    await window.nim.putFts(fts);
+    console.timeEnd('插入FTS')
+
+    // this.searchDB.PUT(fts).then(() => {
+    //   console.log(
+    //     TAG_NAME,
+    //     'search-index save success, last: ',
+    //     new Date().getTime() - tempTime
+    //   )
+    // })
 
     // do add 100 times
     transaction.oncomplete = function (event) {
@@ -168,6 +168,42 @@ class Test {
         TAG_NAME,
         'transaction success, writeData last: ',
         new Date().getTime() - tempTime
+      )
+    }
+
+    transaction.onerror = function (event) {
+      console.log(TAG_NAME, 'transaction error: ' + transaction.error)
+    }
+  }
+
+  /**
+   * 写数据
+   * @param {Number} num
+   */
+   async writeDataInIndexDB(num = 50000) {
+    const transaction = this.db.transaction(['msg1'], 'readwrite')
+    const objectStore = transaction.objectStore('msg1')
+
+    console.log(TAG_NAME, '写事务开始：')
+
+    let tempTime = new Date().getTime()
+
+
+    for (let i = 0; i < num; i++) {
+      let temp = Mock.mock(this.obj)
+      let txt = Mock.Random.cparagraph(2, 10)
+      objectStore.add({
+        ...temp,
+        text: txt,
+      })
+    }
+
+    transaction.oncomplete = function (event) {
+      console.log(
+        TAG_NAME,
+        'transaction success, writeDataInIndexDB last: ',
+        new Date().getTime() - tempTime,
+        ' ms'
       )
     }
 
