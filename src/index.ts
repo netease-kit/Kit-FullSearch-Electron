@@ -285,7 +285,7 @@ const fullText = (NimSdk: any) => {
       try {
         const obj: any = await getLocalMsgs({
           ...opt,
-          limit: 999999,
+          limit: Infinity,
         })
         const result = await deleteLocalMsgs({
           ...opt,
@@ -309,7 +309,7 @@ const fullText = (NimSdk: any) => {
       try {
         const obj: any = await getLocalMsgs({
           sessionId: `${opt.scene}-${opt.to}`,
-          limit: 999999,
+          limit: Infinity,
         })
         const result = await deleteLocalMsgsBySession({
           ...opt,
