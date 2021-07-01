@@ -1,5 +1,5 @@
 const fullText = require('../lib/index').default
-const SDK = require('./sdk/NIM_Web_SDK_v8.3.0_test')
+const SDK = require('./sdk/NIM_Web_SDK_v8.5.1_test')
 const Test = require('./test')
 
 const NIM = fullText(SDK.NIM)

@@ -26,6 +26,19 @@ const promisify = function (func, instance) {
     })
 }
 
+const promisifyForDone = function (func, instance) {
+  return (obj: any) =>
+    new Promise((resolve, reject) => {
+      func.call(instance, {
+        ...obj,
+        done(err, result) {
+          if (err) reject(err)
+          else resolve(result)
+        },
+      })
+    })
+}
+
 export interface IFullTextNim {
   initDB(): Promise<void>
   loadExtension(): Promise<void>
@@ -197,8 +210,9 @@ const fullText = (NimSdk: any) => {
 
     public async createTable(): Promise<void> {
       try {
+        // simple 0 是为了禁止拼音
         await this.searchDB.run(
-          `CREATE VIRTUAL TABLE IF NOT EXISTS t1 USING fts5(_id, text, sessionId, from, time, tokenize = 'simple')`
+          `CREATE VIRTUAL TABLE IF NOT EXISTS t1 USING fts5(_id, text, sessionId, from, time, target, to, type, scene, idServer, fromNick, content, tokenize = 'simple 0')`
         )
       } catch (err) {
         this.ftLogFunc('create VIRTUAL table failed: ', err)
@@ -263,6 +277,51 @@ const fullText = (NimSdk: any) => {
           opt.done && opt.done(err, obj)
         },
       })
+    }
+
+    public async deleteLocalMsgs(opt: any): Promise<void> {
+      const getLocalMsgs = promisifyForDone(super.getLocalMsgs, this)
+      const deleteLocalMsgs = promisifyForDone(super.deleteLocalMsgs, this)
+      try {
+        const obj: any = await getLocalMsgs({
+          ...opt,
+          limit: 999999,
+        })
+        const result = await deleteLocalMsgs({
+          ...opt,
+        })
+        if (obj.msgs && obj.msgs.length > 0) {
+          const idClients = obj.msgs.map(msg => msg.idClient)
+          await this.deleteFts(idClients)
+        }
+        opt.done && opt.done(null, result)
+      } catch (err) {
+        opt.done && opt.done(err)
+      }
+    }
+
+    public async deleteLocalMsgsBySession(opt: any): Promise<void> {
+      const getLocalMsgs = promisifyForDone(super.getLocalMsgs, this)
+      const deleteLocalMsgsBySession = promisifyForDone(
+        super.deleteLocalMsgsBySession,
+        this
+      )
+      try {
+        const obj: any = await getLocalMsgs({
+          sessionId: `${opt.scene}-${opt.to}`,
+          limit: 999999,
+        })
+        const result = await deleteLocalMsgsBySession({
+          ...opt,
+        })
+        if (obj.msgs && obj.msgs.length > 0) {
+          const idClients = obj.msgs.map(msg => msg.idClient)
+          await this.deleteFts(idClients)
+        }
+        opt.done && opt.done(null, result)
+      } catch (err) {
+        opt.done && opt.done(err)
+      }
     }
 
     public deleteAllLocalMsgs(opt: any): any {
@@ -342,15 +401,19 @@ const fullText = (NimSdk: any) => {
         const sql = this._handleQueryParams(params)
         const records = await this.searchDB.all(sql)
         // const records = await this.searchDB.QUERY(queryParams, queryOptions)
-        this.ftLogFunc('queryFts searchDB QUERY success', records)
-        const idClients = (records && records.map((item) => item._id)) || []
-        if (!idClients || !idClients.length) {
-          this.ftLogFunc('queryFts 查询本地消息，无匹配词')
-          throw '查询本地消息，无匹配词'
-        }
-        const res = await this._getLocalMsgsByIdClients(idClients)
-        this.ftLogFunc('queryFts success')
-        return res
+        // this.ftLogFunc('queryFts searchDB QUERY success', records)
+        // const idClients = (records && records.map((item) => item._id)) || []
+        // if (!idClients || !idClients.length) {
+        //   this.ftLogFunc('queryFts 查询本地消息，无匹配词')
+        //   throw '查询本地消息，无匹配词'
+        // }
+        // const res = await this._getLocalMsgsByIdClients(idClients)
+        // this.ftLogFunc('queryFts success')
+
+        // if (!(records && records.length > 0)) {
+        //   throw 'No record suitable'
+        // }
+        return records
       } catch (error) {
         this.ftLogFunc('queryFts fail: ', error)
         throw error
@@ -362,7 +425,7 @@ const fullText = (NimSdk: any) => {
         msgs = [msgs]
       }
       // 去重
-      let map = msgs.reduce((total, next) => {
+      const map = msgs.reduce((total, next) => {
         if (next.idClient) {
           total[next.idClient] = next
         }
@@ -378,6 +441,13 @@ const fullText = (NimSdk: any) => {
             sessionId: msg.sessionId,
             from: msg.from,
             time: msg.time,
+            target: msg.target,
+            to: msg.to,
+            type: msg.type,
+            scene: msg.scene,
+            idServer: msg.idServer,
+            fromNick: msg.fromNick,
+            content: msg.content,
           }
         })
       const ids = fts.map((item) => `"${item._id}"`).join(',')
@@ -406,11 +476,15 @@ const fullText = (NimSdk: any) => {
           this.searchDB.serialize(async () => {
             try {
               const stmt = this.searchDB.prepare(
-                'INSERT OR IGNORE INTO t1 VALUES (?, ?, ?, ?, ?)'
+                'INSERT OR IGNORE INTO t1 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
               )
               this.searchDB.exec('BEGIN TRANSACTION')
               inserts.forEach((msg: IMsg) => {
-                stmt.run(msg._id, msg.text, msg.sessionId, msg.from, msg.time)
+                stmt.run(
+                  msg._id, msg.text, msg.sessionId, msg.from, msg.time,
+                  msg.target, msg.to, msg.type, msg.scene, msg.idServer,
+                  msg.fromNick, msg.content
+                )
               })
               this.searchDB.exec('COMMIT')
               stmt.finalize(function (err) {
@@ -595,7 +669,7 @@ const fullText = (NimSdk: any) => {
       // `select _id from t1 where text match simple_query('${params.text}') limit ${limit} offset 0;`
       const where: string[] = []
       if (text) {
-        where.push(`\`text\` MATCH simple_query('${text}')`)
+        where.push(`\`text\` MATCH simple_query('${text}', true)`)
       }
       if (sessionIds && sessionIds.length > 0) {
         const temp = sessionIds.map((id: string) => `'${id}'`).join(',')
@@ -621,7 +695,7 @@ const fullText = (NimSdk: any) => {
 
       const limitQuery = `LIMIT ${limit} offset ${offset}`
 
-      const sql = `select _id from t1 where ${where.join(
+      const sql = `select * from t1 where ${where.join(
         ' AND '
       )} ${order} ${limitQuery}`
       this.ftLogFunc('_handleQueryParams: ', sql)
@@ -666,17 +740,26 @@ const fullText = (NimSdk: any) => {
       }
       return NimSdk.getInstance({
         ...initOpt,
-        onroamingmsgs: (...args: any) => {
-          this.instance?._putFts(args[0])
-          initOpt.onroamingmsgs && initOpt.onroamingmsgs(...args)
+        onroamingmsgs: (obj, ...rest) => {
+          obj && obj.msgs && this.instance?._putFts(obj.msgs)
+          initOpt.onroamingmsgs && initOpt.onroamingmsgs(obj, ...rest)
         },
-        onofflinemsgs: (...args: any) => {
-          this.instance?._putFts(args[0])
-          initOpt.onofflinemsgs && initOpt.onofflinemsgs(...args)
+        onofflinemsgs: (obj, ...rest) => {
+          obj && obj.msgs && this.instance?._putFts(obj.msgs)
+          initOpt.onofflinemsgs && initOpt.onofflinemsgs(obj, ...rest)
         },
         onmsg: (...args: any) => {
           this.instance?._putFts(args[0])
           initOpt.onmsg && initOpt.onmsg(...args)
+        },
+        onDeleteMsgSelf: (...args: any) => {
+          // 删除 fts
+          const msgs = args[0]
+          const ids = msgs && msgs.map(msg => msg.idClient)
+          if (ids) {
+            this.instance?.deleteFts(ids)
+          }
+          initOpt.onDeleteMsgSelf && initOpt.onDeleteMsgSelf(...args)
         },
       })
     }

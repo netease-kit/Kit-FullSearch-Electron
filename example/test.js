@@ -44,6 +44,7 @@ class Test {
       'to|1': ['cjhz1', 'wangsitu1', 'cs1', 'cs2', 'cs3', 'cs4'],
       type: 'text',
       'userUpdateTime|1600000000000-1700000000000': 1,
+      'content': '{"type":"1","value":{"id":"p2p-cjhz2","msgReceiptTime":1624606039842,"scene":"p2p","to":"cjhz2","updateTime":1624873356674,"lastMsg":{"scene":"p2p","from":"cjhz1","fromNick":"cjhz1","fromClientType":"Web","fromDeviceId":"29d79b4e7a1267af0e66bd46e4f1bc13","to":"cjhz2","time":1624873356674,"type":"custom","text":"","isHistoryable":true,"isRoamingable":true,"isSyncable":true,"cc":true,"isPushable":true,"isOfflinable":true,"isUnreadable":true,"isReplyMsg":true,"needPushNick":true,"needMsgReceipt":false,"isLocal":false,"resend":false,"idClient":"c39b620b46724757c8211456a8b5b0ae","idServer":"10072097","userUpdateTime":1624608239948,"callbackExt":"123456abcd","status":"success","content":"{\"type\":1,\"data\":{\"value\":2}}","target":"cjhz2","sessionId":"p2p-cjhz2","flow":"out"},"unread":2}}'
     }
     // this.ignoreChars = window.nim.ignoreChars
     // this.searchDB = window.nim.searchDB
@@ -136,7 +137,7 @@ class Test {
 
     for (let i = 0; i < num; i++) {
       let temp = Mock.mock(this.obj)
-      let txt = Mock.Random.cparagraph(2, 10)
+      let txt = text || Mock.Random.cparagraph(2, 10)
       // temp.idClient = 'Tua4jkM5cdg3Knkd7Qi1TqGDuiuZfGWh'
       fts.push({
         ...temp,
