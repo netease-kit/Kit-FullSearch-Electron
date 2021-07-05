@@ -18,7 +18,8 @@
     "im"
   ],
   "scripts": {
-    "build": "rm -rf ./lib && npx tsc",
+    "install": "just install",
+    "build": "npx tsc",
     "p": "npm run build && npm publish"
   },
   "repository": {
@@ -43,10 +44,14 @@
     "rollup-plugin-node-polyfills": "^0.2.1",
     "rollup-plugin-terser": "^7.0.2",
     "rollup-plugin-typescript2": "^0.30.0",
-    "typescript": "^4.1.5",
-    "sqlite3": "^5.0.2"
+    "sqlite3": "^5.0.2",
+    "typescript": "^4.1.5"
   },
   "peerDependencies": {
     "sqlite3": "^5.0.2"
+  },
+  "dependencies": {
+    "download": "^8.0.0",
+    "just-scripts": "^1.5.4"
   }
 }

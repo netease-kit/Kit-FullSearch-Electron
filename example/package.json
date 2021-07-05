@@ -4,7 +4,8 @@
   "description": "electron fulltext search demo",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "package": "electron-builder"
   },
   "keywords": [
     "Electron",
@@ -15,9 +16,21 @@
   ],
   "author": "Netease-yunxin",
   "license": "CC0-1.0",
+  "build": {
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/kit-fullsearch-electron"
+    ]
+  },
   "dependencies": {
-    "electron": "^11.4.2",
+    "kit-fullsearch-electron": "file:..",
     "mockjs": "^1.1.0",
     "sqlite3": "^5.0.2"
+  },
+  "devDependencies": {
+    "electron": "^8.1.1",
+    "electron-builder": "^22.4.1",
+    "electron-packager": "^15.2.0",
+    "electron-rebuild": "^2.3.5"
   }
 }

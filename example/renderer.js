@@ -1,9 +1,7 @@
-const fullText = require('../lib/index').default
+const fullText = require('kit-fullsearch-electron').default
 const SDK = require('./sdk/NIM_Web_SDK_v8.5.1_test')
 const Test = require('./test')
-
 const NIM = fullText(SDK.NIM)
-
 const TAG_NAME = 'renderer.js'
 
 function doLog(err, obj) {
@@ -21,6 +19,7 @@ NIM.getInstance({
   reconnectionDelay: 1000, // 在第一次尝试重连之前最初等待多长时间
   reconnectionDelayMax: 60000, // 重新连接之间等待的最大时间
   reconnectionJitter: 0, // 重连等待时间振荡值
+  searchDBPath: process.env.HOME,
 
   // 自定义分词函数
   // fullSearchCutFunc: (text) => {
