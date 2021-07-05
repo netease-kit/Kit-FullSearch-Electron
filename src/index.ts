@@ -158,7 +158,7 @@ const fullText = (NimSdk: any) => {
 
     public async initDB(): Promise<void> {
       const finalName = this.searchDBPath
-        ? `${this.searchDBPath}/${this.searchDBName}.sqlite`
+        ? path.join(this.searchDBPath, `${this.searchDBName}.sqlite`)
         : `${this.searchDBName}.sqlite`
       const that = this
       this.searchDB = await new Promise(function (resolve, reject) {
@@ -189,13 +189,10 @@ const fullText = (NimSdk: any) => {
         let libName = 'libsimple'
         if (type === 'Darwin') {
           libName = 'libsimple'
-        } else if (arch === 'x64') {
-          libName = 'simple_x64.dll'
         } else {
-          libName = 'simple_x86.dll'
+          libName = 'simple.dll'
         }
-        filePath = path.join(__dirname, libName).replace('app.asar', 'app.asar.unpacked')
-        // filePath = 'D:\\tokenizer\\libsimple_x32.dll'
+        filePath = path.resolve(path.join(__dirname, libName).replace('app.asar', 'app.asar.unpacked'))
       }
       await new Promise((resolve, reject) => {
         this.searchDB.loadExtension(filePath, function (err) {

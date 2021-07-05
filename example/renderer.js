@@ -19,7 +19,7 @@ NIM.getInstance({
   reconnectionDelay: 1000, // 在第一次尝试重连之前最初等待多长时间
   reconnectionDelayMax: 60000, // 重新连接之间等待的最大时间
   reconnectionJitter: 0, // 重连等待时间振荡值
-  searchDBPath: '/Users/admin/',
+  searchDBPath: process.env.HOME,
 
   // 自定义分词函数
   // fullSearchCutFunc: (text) => {
