@@ -7,7 +7,7 @@
 前置依赖
 
 ```bash
-$ npm install kit-fullsearch-electron sqlite3
+$ npm install --save kit-fullsearch-electron sqlite3
 ```
 
 采用 sqlite fts5 extension，默认的 sqlite3 并不支持中文分词，故而使用者需要把编译好的 /example/tokenizer 分词文件夹放入主工程根目录下。
