@@ -192,7 +192,7 @@ const fullText = (NimSdk: any) => {
         } else {
           libName = 'simple.dll'
         }
-        filePath = path.resolve(path.join(__dirname, libName).replace('app.asar', 'app.asar.unpacked'))
+        filePath = path.resolve(path.join(__dirname, libName).replace(/^(.+)asar\/(.+)$/, '$1asar.unpakced/$2'))
       }
       await new Promise((resolve, reject) => {
         this.searchDB.loadExtension(filePath, function (err) {

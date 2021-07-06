@@ -17,10 +17,7 @@
   "author": "Netease-yunxin",
   "license": "CC0-1.0",
   "build": {
-    "asar": true,
-    "asarUnpack": [
-      "node_modules/kit-fullsearch-electron"
-    ]
+    "asar": true
   },
   "dependencies": {
     "kit-fullsearch-electron": "file:..",
