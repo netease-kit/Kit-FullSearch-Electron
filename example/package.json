@@ -20,6 +20,7 @@
     "asar": true
   },
   "dependencies": {
+    "kit-fullsearch-electron": "file:..",
     "mockjs": "^1.1.0",
     "sqlite3": "^5.0.2"
   },

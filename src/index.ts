@@ -39,6 +39,21 @@ const promisifyForDone = function (func, instance) {
     })
 }
 
+const tableColumn = [
+  '_id',
+  'text',
+  'sessionId',
+  'from',
+  'time',
+  'target',
+  'to',
+  'type',
+  'scene',
+  'idServer',
+  'fromNick',
+  'content',
+]
+
 export interface IFullTextNim {
   initDB(): Promise<void>
   loadExtension(): Promise<void>
@@ -208,8 +223,9 @@ const fullText = (NimSdk: any) => {
     public async createTable(): Promise<void> {
       try {
         // simple 0 是为了禁止拼音
+        const column = tableColumn.map((item) => '`' + item + '`').join(', ')
         await this.searchDB.run(
-          `CREATE VIRTUAL TABLE IF NOT EXISTS t1 USING fts5(_id, text, sessionId, from, time, target, to, type, scene, idServer, fromNick, content, tokenize = 'simple 0')`
+          `CREATE VIRTUAL TABLE IF NOT EXISTS t1 USING fts5(${column}, tokenize = 'simple 0')`
         )
       } catch (err) {
         this.ftLogFunc('create VIRTUAL table failed: ', err)
@@ -473,7 +489,7 @@ const fullText = (NimSdk: any) => {
           this.searchDB.serialize(async () => {
             try {
               const stmt = this.searchDB.prepare(
-                'INSERT OR IGNORE INTO t1 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                `INSERT OR IGNORE INTO t1 VALUES (${tableColumn.map(item => '?').join(',')})`
               )
               this.searchDB.exec('BEGIN TRANSACTION')
               inserts.forEach((msg: IMsg) => {
@@ -666,6 +682,8 @@ const fullText = (NimSdk: any) => {
       // `select _id from t1 where text match simple_query('${params.text}') limit ${limit} offset 0;`
       const where: string[] = []
       if (text) {
+        // text 就简单替换 ' 这种字符，换掉把
+        text = text.replace(/\'/g, '')
         where.push(`\`text\` MATCH simple_query('${text}', true)`)
       }
       if (sessionIds && sessionIds.length > 0) {
@@ -690,9 +708,15 @@ const fullText = (NimSdk: any) => {
         order = `ORDER BY time DESC`
       }
 
-      const limitQuery = `LIMIT ${limit} offset ${offset}`
-
-      const sql = `select * from t1 where ${where.join(
+      let limitQuery = ''
+      if (limit !== Infinity) {
+        limitQuery = `LIMIT ${limit} offset ${offset}`
+      }
+      const column = tableColumn
+        .slice(1)
+        .map(item => '`' + item + '`')
+        .join(', ')
+      const sql = `select \`_id\` as \`idClient\`, ${column} from t1 where ${where.join(
         ' AND '
       )} ${order} ${limitQuery}`
       this.ftLogFunc('_handleQueryParams: ', sql)
