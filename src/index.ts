@@ -395,7 +395,10 @@ const fullText = (NimSdk: any) => {
 
       const msgs: IMsg[] = obj.msgs
 
-      await this.putFts(msgs || [])
+      if (msgs && msgs.length > 0) {
+        await this.putFts(msgs || [])
+      }
+
       opt.done && opt.done(null, obj)
 
       // return super.getLocalMsgs({
@@ -465,7 +468,7 @@ const fullText = (NimSdk: any) => {
         })
       const ids = fts.map((item) => `"${item._id}"`).join(',')
       const existRows = await this.searchDB.all(
-        `select rowid, _id from t1 where _id in (${ids}) limit 1`
+        `select rowid, _id from t1 where _id in (${ids})`
       )
       const existRowIds =
         existRows && existRows.length > 0 ? existRows.map((row) => row._id) : []
