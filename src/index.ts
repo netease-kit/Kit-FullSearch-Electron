@@ -194,6 +194,7 @@ const fullText = (NimSdk: any) => {
       this.searchDB.all = promisify(this.searchDB.all, this.searchDB)
       await this.loadExtension()
       await this.createTable()
+      await this.loadDict()
       // console.log(this.searchDB.close())
     }
 
@@ -218,6 +219,19 @@ const fullText = (NimSdk: any) => {
           resolve({})
         })
       })
+    }
+
+    public async loadDict(): Promise<void> {
+      try {
+        const resourcePath = path.resolve(path.join(__dirname).replace(/^(.+)asar(.node_modules.+)$/, '$1asar.unpacked$2'))
+        const dictPath = path.join(resourcePath, 'dict').concat(process.platform === 'win32' ? '\\' : '/')
+        console.log(dictPath)
+        await this.searchDB.run(
+          `SELECT jieba_dict("${dictPath}")`
+        )
+      } catch (err) {
+        this.ftLogFunc('failed to load jieba dict: ', err)
+      }
     }
 
     public async createTable(): Promise<void> {
@@ -687,7 +701,7 @@ const fullText = (NimSdk: any) => {
       if (text) {
         // text 就简单替换 ' 这种字符，换掉把
         text = text.replace(/\'/g, '')
-        where.push(`\`text\` MATCH simple_query('${text}', true)`)
+        where.push(`\`text\` MATCH jieba_query('${text}', true)`)
       }
       if (sessionIds && sessionIds.length > 0) {
         const temp = sessionIds.map((id: string) => `'${id}'`).join(',')
