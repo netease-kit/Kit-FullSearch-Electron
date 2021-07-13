@@ -701,7 +701,7 @@ const fullText = (NimSdk: any) => {
       if (text) {
         // text 就简单替换 ' 这种字符，换掉把
         text = text.replace(/\'/g, '')
-        where.push(`\`text\` MATCH jieba_query('${text}', true)`)
+        where.push(`\`text\` MATCH jieba_query('${text}')`)
       }
       if (sessionIds && sessionIds.length > 0) {
         const temp = sessionIds.map((id: string) => `'${id}'`).join(',')
