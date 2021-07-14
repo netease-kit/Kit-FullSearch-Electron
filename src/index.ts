@@ -428,6 +428,16 @@ const fullText = (NimSdk: any) => {
 
     public async queryFts(params: IQueryParams): Promise<any> {
       try {
+        // 入参过滤，去除多余的符号
+        // text 就简单替换 ' 这种字符，换掉把
+        if (params.text) {
+          const reg = /[^\u4e00-\u9fa5^a-z^A-Z^0-9]/g
+          params.text = params.text.replace(reg, ' ').trim()
+        }
+        if (params.text === '') {
+          return []
+        }
+
         const sql = this._handleQueryParams(params)
         const records = await this.searchDB.all(sql)
         // const records = await this.searchDB.QUERY(queryParams, queryOptions)
@@ -699,9 +709,7 @@ const fullText = (NimSdk: any) => {
       // `select _id from t1 where text match simple_query('${params.text}') limit ${limit} offset 0;`
       const where: string[] = []
       if (text) {
-        // text 就简单替换 ' 这种字符，换掉把
-        text = text.replace(/\'/g, '')
-        where.push(`\`text\` MATCH jieba_query('${text}')`)
+        where.push(`\`text\` MATCH simple_query('${text}')`)
       }
       if (sessionIds && sessionIds.length > 0) {
         const temp = sessionIds.map((id: string) => `'${id}'`).join(',')
@@ -798,6 +806,20 @@ const fullText = (NimSdk: any) => {
             this.instance?.deleteFts(ids)
           }
           initOpt.onDeleteMsgSelf && initOpt.onDeleteMsgSelf(...args)
+        },
+        onsysmsg: (obj, ...rest) => {
+          // 撤回
+          if (obj && obj.type === 'deleteMsg') {
+            this.instance?.deleteFts(obj.deletedIdClient)
+          }
+          initOpt.onsysmsg && initOpt.onsysmsg(obj, ...rest)
+        },
+        onofflinesysmsgs: (obj, ...rest) => {
+          const ids = obj && obj.map(msg => msg.type === 'deleteMsg' && msg.deletedIdClient)
+          if (ids) {
+            this.instance?.deleteFts(ids)
+          }
+          initOpt.onofflinesysmsgs && initOpt.onofflinesysmsgs(obj, ...rest)
         },
       })
     }
