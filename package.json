@@ -1,6 +1,6 @@
 {
   "name": "kit-fullsearch-electron",
-  "version": "2.0.11",
+  "version": "2.1.0",
   "description": "全文搜索组件，基于网易云信web端im sdk，用于Electron",
   "main": "lib/index.js",
   "module": "lib/index.js",
