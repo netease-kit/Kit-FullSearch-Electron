@@ -114,6 +114,17 @@ export interface ISiItem {
   idx: string
 }
 
+export enum QueryOption {
+  kDefault,
+  kSimple,
+  kJiebaCutWithHMM,
+  kJiebaCutWithoutHMM,
+  kJiebaCutAll,
+  kJiebaCutForSearch,
+  kJiebaCutHMM,
+  kJiebaCutSmall
+}
+
 /**
  * 全文搜索扩展函数
  * @param NimSdk im sdk的类
@@ -121,6 +132,8 @@ export interface ISiItem {
 const fullText = (NimSdk: any) => {
   return class FullTextNim extends NimSdk implements IFullTextNim {
     public static instance: FullTextNim | null
+    queryOption: QueryOption
+    enablePinyin: boolean
     searchDB: any
     ftLogFunc: (...args: any) => void
     // ignoreChars: string
@@ -138,6 +151,8 @@ const fullText = (NimSdk: any) => {
         account,
         appKey,
         // ignoreChars,
+        queryOption,
+        enablePinyin,
         searchDBName,
         searchDBPath,
         debug,
@@ -164,6 +179,8 @@ const fullText = (NimSdk: any) => {
       // this.ignoreChars =
       //   ignoreChars ||
       //   ' \t\r\n~!@#$%^&*()_+-=【】、{}|;\':"，。、《》？αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ。，、；：？！…—·ˉ¨‘’“”々～‖∶＂＇｀｜〃〔〕〈〉《》「」『』．〖〗【】（）［］｛｝ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩⅪⅫ⒈⒉⒊⒋⒌⒍⒎⒏⒐⒑⒒⒓⒔⒕⒖⒗⒘⒙⒚⒛㈠㈡㈢㈣㈤㈥㈦㈧㈨㈩①②③④⑤⑥⑦⑧⑨⑩⑴⑵⑶⑷⑸⑹⑺⑻⑼⑽⑾⑿⒀⒁⒂⒃⒄⒅⒆⒇≈≡≠＝≤≥＜＞≮≯∷±＋－×÷／∫∮∝∞∧∨∑∏∪∩∈∵∴⊥∥∠⌒⊙≌∽√§№☆★○●◎◇◆□℃‰€■△▲※→←↑↓〓¤°＃＆＠＼︿＿￣―♂♀┌┍┎┐┑┒┓─┄┈├┝┞┟┠┡┢┣│┆┊┬┭┮┯┰┱┲┳┼┽┾┿╀╁╂╃└┕┖┗┘┙┚┛━┅┉┤┥┦┧┨┩┪┫┃┇┋┴┵┶┷┸┹┺┻╋╊╉╈╇╆╅╄'
+      this.queryOption = queryOption || QueryOption.kDefault
+      this.enablePinyin = enablePinyin || false
       this.searchDBName = searchDBName || `${account}-${appKey}`
       this.searchDBPath = searchDBPath || ''
       if (fullSearchCutFunc) {
@@ -709,7 +726,7 @@ const fullText = (NimSdk: any) => {
       // `select _id from t1 where text match simple_query('${params.text}') limit ${limit} offset 0;`
       const where: string[] = []
       if (text) {
-        where.push(`\`text\` MATCH simple_query('${text}')`)
+        where.push(`\`text\` MATCH query('${text}', ${this.queryOption}, ${this.enablePinyin})`)
       }
       if (sessionIds && sessionIds.length > 0) {
         const temp = sessionIds.map((id: string) => `'${id}'`).join(',')

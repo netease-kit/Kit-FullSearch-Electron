@@ -13,6 +13,8 @@ NIM.getInstance({
   appKey: 'fe416640c8e8a72734219e1847ad2547',
   account: 'cs6',
   token: 'e10adc3949ba59abbe56e057f20f883e',
+  queryOption: 1,
+  enablePinyin: false,
   // db: form.db,
   // syncSessionUnread: form.syncSessionUnread,
   // autoMarkRead: form.syncSessionUnread,
@@ -52,9 +54,8 @@ NIM.getInstance({
       WindowsPhone: '手机版',
     }
     let str = error.from
-    let errorMsg = `你的帐号于${new Date()}被${
-      map[str] || '其他端'
-    }踢出下线，请确定帐号信息安全!`
+    let errorMsg = `你的帐号于${new Date()}被${map[str] || '其他端'
+      }踢出下线，请确定帐号信息安全!`
     switch (error.code) {
       // 账号或者密码错误, 请跳转到登录页面并提示错误
       case 302:
@@ -115,9 +116,9 @@ NIM.getInstance({
 
   /* 消息 */
   /* 已下三个函数会自动同步到searchDB */
-  onroamingmsgs: function (obj) {},
-  onofflinemsgs: function (obj) {},
-  onmsg: function (obj) {},
+  onroamingmsgs: function (obj) { },
+  onofflinemsgs: function (obj) { },
+  onmsg: function (obj) { },
 
   /* 系统通知 */
   onsysmsg: doLog,
