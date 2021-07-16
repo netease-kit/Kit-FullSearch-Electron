@@ -139,8 +139,15 @@ window.onload = (function () {
         console.error('无数据库')
       }
     }
+    else if (hasClass(target, 'j-syncall')) {
+      if (window.nim && window.nim.getLocalMsgsToFts) {
+        doSyncAll();
+      } else {
+        console.error('无数据库')
+      }
+    }
     else if (hasClass(target, 'j-write-indexdb')) {
-      window.test.writeDataInIndexDB(50000)
+      window.test.writeDataInIndexDB(10000)
     }
   })
 })()
@@ -208,3 +215,30 @@ function doSyncByLimit(end = new Date().getTime()) {
     },
   })
 }
+
+function doSyncAll(end = new Date().getTime()) {
+  // if (order === 24) {
+  //   return;
+  // }
+  // const aYearAgo = new Date().getTime() - 31536000000;
+  // const aMonth = 2592000000;
+  // const start = aYearAgo + (order * aMonth)
+  // const end = start + aMonth
+  console.time('doSyncByLimit')
+  window.nim.getLocalMsgsToFts({
+    start: 0, // 起点
+    end: 1640995200000, // 终点
+    desc: true, // 从start开始查
+    types: ['text', 'custom'], // 只针对文本消息和自定义消息
+    limit: 9999999,
+    done(error, obj) {
+      console.log(
+        '获取并同步本地消息' + (!error ? '成功' : '失败'),
+        error,
+        '结束时间 ' + new Date(end),
+        // '共 ' + obj.msgs && obj.msgs.length + ' 条'
+      )
+    },
+  })
+}
+
