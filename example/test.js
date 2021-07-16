@@ -135,6 +135,7 @@ class Test {
 
     let fts = []
 
+    console.log(TAG_NAME, '构造数据开始 ~')
     for (let i = 0; i < num; i++) {
       let temp = Mock.mock(this.obj)
       let txt = text || Mock.Random.cparagraph(2, 10)
@@ -150,6 +151,7 @@ class Test {
         // terms: window.nim._cut(temp.text).filter(word => !this.ignoreChars.includes(word))
       })
     }
+    console.log(TAG_NAME, '构造数据结束 ~')
 
     console.time('插入FTS')
     await window.nim.putFts(fts);
@@ -181,7 +183,7 @@ class Test {
    * 写数据
    * @param {Number} num
    */
-   async writeDataInIndexDB(num = 50000) {
+  async writeDataInIndexDB(num = 50000) {
     const transaction = this.db.transaction(['msg1'], 'readwrite')
     const objectStore = transaction.objectStore('msg1')
 

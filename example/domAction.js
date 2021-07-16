@@ -5,8 +5,8 @@ window.onload = (function () {
     const funcName = id.startsWith('.')
       ? 'getElementByClassNames'
       : id.startsWith('#')
-      ? 'getElementById'
-      : undefined
+        ? 'getElementById'
+        : undefined
     if (funcName) {
       return document[funcName](id.slice(1))
     }
@@ -45,6 +45,7 @@ window.onload = (function () {
       const sessionIds = $('#q-sessionIds').value || undefined
       const froms = $('#q-froms').value || undefined
       const sort = $('#q-sort').value || undefined
+      const queryOption = $('#q-option').value || 0
       let start = $('#q-start').value
       let end = $('#q-end').value
       if (!text && !sessionIds && !froms) {
@@ -73,6 +74,7 @@ window.onload = (function () {
             timeDirection: sort,
             start,
             end,
+            queryOption
           })
           .then((res) => {
             const _end = performance.now()
