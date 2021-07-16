@@ -89,6 +89,17 @@ export type IDirection = 'ascend' | 'descend'
 
 export type ILogic = 'and' | 'or'
 
+export enum QueryOption {
+  kDefault,
+  kSimple,
+  kJiebaCutWithHMM,
+  kJiebaCutWithoutHMM,
+  kJiebaCutAll,
+  kJiebaCutForSearch,
+  kJiebaCutHMM,
+  kJiebaCutSmall
+}
+
 export interface IQueryParams {
   text: string
   limit?: number
@@ -101,6 +112,7 @@ export interface IQueryParams {
   textLogic?: ILogic
   sessionIdLogic?: ILogic
   fromsLogic?: ILogic
+  queryOption?: QueryOption
 }
 
 export interface IMsg {
@@ -112,17 +124,6 @@ export interface ISiItem {
   time: number
   sessionId: string
   idx: string
-}
-
-export enum QueryOption {
-  kDefault,
-  kSimple,
-  kJiebaCutWithHMM,
-  kJiebaCutWithoutHMM,
-  kJiebaCutAll,
-  kJiebaCutForSearch,
-  kJiebaCutHMM,
-  kJiebaCutSmall
 }
 
 /**
@@ -722,11 +723,12 @@ const fullText = (NimSdk: any) => {
       offset = 0,
       start,
       end,
+      queryOption = this.queryOption
     }: IQueryParams): string {
       // `select _id from t1 where text match simple_query('${params.text}') limit ${limit} offset 0;`
       const where: string[] = []
       if (text) {
-        where.push(`\`text\` MATCH query('${text}', ${this.queryOption}, ${this.enablePinyin})`)
+        where.push(`\`text\` MATCH query('${text}', ${queryOption}, ${this.enablePinyin})`)
       }
       if (sessionIds && sessionIds.length > 0) {
         const temp = sessionIds.map((id: string) => `'${id}'`).join(',')
