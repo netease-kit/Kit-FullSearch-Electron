@@ -252,6 +252,10 @@ const fullText = (NimSdk: any) => {
       }
     }
 
+    public formatSQLText(src: string): string {
+      return src.replace(/\'/gi, `''`)
+    }
+
     public async createTable(): Promise<void> {
       try {
         // simple 0 是为了禁止拼音
@@ -533,27 +537,27 @@ const fullText = (NimSdk: any) => {
         await new Promise((resolve, reject) => {
           this.searchDB.serialize(async () => {
             try {
-              const stmt = this.searchDB.prepare(
-                `INSERT OR IGNORE INTO t1 VALUES (${tableColumn.map(item => '?').join(',')})`
-              )
-              this.searchDB.exec('BEGIN TRANSACTION')
-              inserts.forEach((msg: IMsg) => {
-                stmt.run(
-                  msg._id, msg.text, msg.sessionId, msg.from, msg.time,
-                  msg.target, msg.to, msg.type, msg.scene, msg.idServer,
-                  msg.fromNick, msg.content
-                )
+              this.searchDB.exec('BEGIN TRANSACTION;')
+              inserts.map(msg => {
+                const insertSQL = `INSERT OR IGNORE INTO t1 VALUES(
+                  '${msg._id}',
+                  '${this.formatSQLText(msg.text)}',
+                  '${msg.sessionId}',
+                  '${msg.from}',
+                  '${msg.time}',
+                  '${msg.target}',
+                  '${msg.to}',
+                  '${msg.type}',
+                  '${msg.scene}',
+                  '${msg.idServer}',
+                  '${msg.fromNick}',
+                  '${this.formatSQLText(msg.content || '')}'
+                )`
+                this.searchDB.exec(insertSQL)
               })
-              this.searchDB.exec('COMMIT')
-              stmt.finalize(function (err) {
-                if (err) {
-                  reject(err)
-                } else {
-                  resolve({})
-                }
-              })
+              this.searchDB.exec('COMMIT;')
             } catch (err) {
-              this.searchDB.exec('ROLLBACK TRANSACTION')
+              this.searchDB.exec('ROLLBACK TRANSACTION;')
               reject(err)
             }
           })
