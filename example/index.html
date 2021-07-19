@@ -58,18 +58,20 @@
       </select>
     </div>
     <div>
-      <h3>同步indexDB到search-index</h3>
-      <button class="j-write-indexdb">只往 indexDB 写入 10000 条（20年到21年7月间）</button>
-      <button class="j-sync">同步最近两年</button>
-      <button class="j-syncall">同步所有</button>
-      时间范围
-      <span>开始时间</span>
-      <input id="q-start" type="text" placeholder="2021-4-27 10:12:11" />
-      <span>结束时间</span>
-      <input id="q-end" type="text" placeholder="2021-4-27 12:12:11" />
+      <button class="j-query-fulltext">查询</button>
     </div>
     <div>
-      <button class="j-query-fulltext">查询</button>
+      <div>
+        <h3>同步indexDB到search-index</h3>
+        <button class="j-write-indexdb">只往 indexDB 写入 10000 条（20年到21年7月间）</button>
+        <button class="j-sync">同步最近两年</button>
+        <button class="j-syncall">同步所有</button>
+        <br>时间范围
+        <span>开始时间</span>
+        <input id="q-start" type="text" placeholder="2021-4-27 10:12:11" />
+        <span>结束时间</span>
+        <input id="q-end" type="text" placeholder="2021-4-27 12:12:11" />
+      </div>
     </div>
   </div>
   <div>
