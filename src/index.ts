@@ -786,7 +786,7 @@ const fullText = (NimSdk: any) => {
         .join(', ')
 
       const whereSQL = where.length > 0 ? `where ${where.join(' AND ')}` : ''
-      const sql = `select \`_id\` as \`idClient\`, ${column} from t1 ${whereSQL} ${order} ${limitQuery}`
+      const sql = `select \`_id\` as \`idClient\`, ${column} from t1 ${whereSQL} GROUP BY \`idClient\` ${order} ${limitQuery}`
       this.ftLogFunc('_handleQueryParams: ', sql)
       return sql
     }
