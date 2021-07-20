@@ -139,6 +139,11 @@ NIM.getInstance({
     console.log(TAG_NAME, 'onsyncdone')
   },
 }).then((nim) => {
-  console.log('then?')
   window.nim = nim
+  nim.on('ftsError', function (sql) {
+    console.log('sql 执行出错', sql)
+  })
+  nim.on('ftsUpsert', function (excuteRow, restRow) {
+    console.log('upsert 进行中，已执行 ', excuteRow, ' 还剩下 ', restRow)
+  })
 })

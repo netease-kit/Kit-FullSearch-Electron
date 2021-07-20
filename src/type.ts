@@ -11,7 +11,10 @@ export interface IFullTextNim {
   deleteMsgSelf(opt: any): any
   deleteMsgSelfBatch(opt: any): any
   queryFts(params: IQueryParams): Promise<any>
-  putFts(msgs: IMsg | IMsg[]): Promise<void>
+  putFts(msgs: IMsg | IMsg[]): void
+  _putFts(): Promise<void>
+  _doInsert(msgs: IMsg[]): Promise<void>
+  _doUpdate(msgs: IMsg[]): Promise<void>
   deleteFts(ids: string | string[]): Promise<void>
   clearAllFts(): Promise<void>
   destroy(...args: any): void
