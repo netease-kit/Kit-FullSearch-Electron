@@ -392,7 +392,10 @@ const fullText = (NimSdk: any) => {
         this.timeout = (setTimeout(() => {
           this._putFts()
         }, 0) as unknown) as number
+      } else {
+        this.timeout = 0
       }
+
       console.timeEnd('一批1000个putFts耗时')
     }
 
