@@ -375,17 +375,18 @@ const fullText = (NimSdk: any) => {
       console.time('一批1000个putFts耗时')
       const msgs = this.msgQueue.splice(0, 1000)
 
-      const { inserts, updates } = await this._getMsgsWithInsertAndUpdate(msgs)
+      // const { inserts, updates } = await this._getMsgsWithInsertAndUpdate(msgs)
+      const fts = await this._getMsgsWithInsertAndUpdate(msgs)
 
-      if (inserts.length > 0) {
-        console.log('插入', inserts.length, '条')
-        await this._doInsert(inserts)
+      if (fts.length > 0) {
+        console.log('插入', fts.length, '条')
+        await this._doInsert(fts)
       }
 
-      if (updates.length > 0) {
-        console.log('修改', updates.length, '条')
-        await this._doUpdate(updates)
-      }
+      // if (updates.length > 0) {
+      //   console.log('修改', updates.length, '条')
+      //   await this._doUpdate(updates)
+      // }
 
       // 队列里还存在未同步的，那么继续定时执行
       if (this.msgQueue.length > 0) {
@@ -399,12 +400,8 @@ const fullText = (NimSdk: any) => {
       console.timeEnd('一批1000个putFts耗时')
     }
 
-    async _getMsgsWithInsertAndUpdate(
-      msgs: IMsg[]
-    ): Promise<{
-      inserts: IMsg[]
-      updates: IMsg[]
-    }> {
+    async _getMsgsWithInsertAndUpdate(msgs: IMsg[]): Promise<IMsg[]> {
+      // 去重
       const map = msgs.reduce((total, next) => {
         if (next.idClient) {
           total[next.idClient] = next
@@ -430,29 +427,30 @@ const fullText = (NimSdk: any) => {
             content: msg.content,
           }
         })
-      const ids = fts.map((item) => `"${item._id}"`).join(',')
-      const existRows = await this.searchDB.all(
-        `select rowid, _id from t1 where _id in (${ids})`
-      )
-      const existRowIds =
-        existRows && existRows.length > 0 ? existRows.map((row) => row._id) : []
-      const updates: any[] = []
-      const inserts: any[] = []
-      fts.forEach((item) => {
-        const idx = existRowIds.indexOf(item._id)
-        if (idx === -1) {
-          inserts.push(item)
-        } else {
-          updates.push({
-            ...item,
-            rowid: existRows[idx].rowid,
-          })
-        }
-      })
-      return {
-        updates,
-        inserts,
-      }
+      return fts
+      // const ids = fts.map((item) => `"${item._id}"`).join(',')
+      // const existRows = await this.searchDB.all(
+      //   `select rowid, _id from t1 where _id in (${ids})`
+      // )
+      // const existRowIds =
+      //   existRows && existRows.length > 0 ? existRows.map((row) => row._id) : []
+      // const updates: any[] = []
+      // const inserts: any[] = []
+      // fts.forEach((item) => {
+      //   const idx = existRowIds.indexOf(item._id)
+      //   if (idx === -1) {
+      //     inserts.push(item)
+      //   } else {
+      //     updates.push({
+      //       ...item,
+      //       rowid: existRows[idx].rowid,
+      //     })
+      //   }
+      // })
+      // return {
+      //   updates,
+      //   inserts,
+      // }
     }
 
     async _doInsert(msgs: IMsg[]): Promise<void> {
