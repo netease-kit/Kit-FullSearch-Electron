@@ -199,7 +199,7 @@ function doSyncByLimit(end = new Date().getTime()) {
     end: end, // 终点
     desc: true, // 从start开始查
     types: ['text', 'custom'], // 只针对文本消息和自定义消息
-    limit: 100,
+    limit: 3000,
     done(error, obj) {
       console.log(
         '获取并同步本地消息' + (!error ? '成功' : '失败'),

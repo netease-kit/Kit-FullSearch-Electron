@@ -372,8 +372,8 @@ const fullText = (NimSdk: any) => {
     }
 
     async _putFts(): Promise<void> {
-      console.time('一批1000个putFts耗时')
-      const msgs = this.msgQueue.splice(0, 1000)
+      console.time('一批 3000 个putFts耗时')
+      const msgs = this.msgQueue.splice(0, 3000)
 
       // const { inserts, updates } = await this._getMsgsWithInsertAndUpdate(msgs)
       const fts = await this._getMsgsWithInsertAndUpdate(msgs)
@@ -397,7 +397,7 @@ const fullText = (NimSdk: any) => {
         this.timeout = 0
       }
 
-      console.timeEnd('一批1000个putFts耗时')
+      console.timeEnd('一批 3000 个putFts耗时')
     }
 
     async _getMsgsWithInsertAndUpdate(msgs: IMsg[]): Promise<IMsg[]> {
@@ -428,78 +428,41 @@ const fullText = (NimSdk: any) => {
           }
         })
       return fts
-      // const ids = fts.map((item) => `"${item._id}"`).join(',')
-      // const existRows = await this.searchDB.all(
-      //   `select rowid, _id from t1 where _id in (${ids})`
-      // )
-      // const existRowIds =
-      //   existRows && existRows.length > 0 ? existRows.map((row) => row._id) : []
-      // const updates: any[] = []
-      // const inserts: any[] = []
-      // fts.forEach((item) => {
-      //   const idx = existRowIds.indexOf(item._id)
-      //   if (idx === -1) {
-      //     inserts.push(item)
-      //   } else {
-      //     updates.push({
-      //       ...item,
-      //       rowid: existRows[idx].rowid,
-      //     })
-      //   }
-      // })
-      // return {
-      //   updates,
-      //   inserts,
-      // }
     }
 
     async _doInsert(msgs: IMsg[]): Promise<void> {
       const that = this
       return new Promise((resolve, reject) => {
+        const column = tableColumn.map(item => '?').join(',')
         this.searchDB.serialize(async () => {
           try {
             this.searchDB.exec('BEGIN TRANSACTION;')
-            const sqls = msgs.map((msg, index) => {
-              const sql =
-                `INSERT OR IGNORE INTO \`t1\` VALUES(` +
-                `'${msg._id}',` +
-                `'${this.formatSQLText(msg.text)}',` +
-                `'${msg.sessionId}',` +
-                `'${msg.from}',` +
-                `'${msg.time}',` +
-                `'${msg.target}',` +
-                `'${msg.to}',` +
-                `'${msg.type}',` +
-                `'${msg.scene}',` +
-                `'${msg.idServer}',` +
-                `'${msg.fromNick}',` +
-                `'${this.formatSQLText(msg.content || '')}'` +
-                `)`
-              // if (index === 1) {
-              //   insertSQL += '))'
-              // }
-              this.searchDB.exec(sql, function (err) {
+            msgs.map((msg, index) => {
+              this.searchDB.run(`INSERT OR IGNORE INTO \`t1\` VALUES(${column});`, [
+                msg._id,
+                msg.text,
+                msg.sessionId,
+                msg.from,
+                msg.time,
+                msg.target,
+                msg.to,
+                msg.type,
+                msg.scene,
+                msg.idServer,
+                msg.fromNick,
+                msg.content
+              ], function (err) {
                 if (err) {
-                  console.log('insert exec error: ', err)
-                  that.emit('ftsError', sql)
+                  console.log(err, JSON.stringify(msg))
                 }
-                // else {
-                //   console.log('insert exec success')
-                // }
               })
-              // return sql
-              return `${msg._id}, ${msg.time}`
             })
             this.searchDB.exec('COMMIT;', function (err) {
-              // console.log('执行消息对象：\n', sqls.join('\n'))
               if (err) {
                 console.log('insert commit error: ', err)
                 return
               }
-              that.emit('ftsUpsert', sqls.length, that.msgQueue.length)
-              // else {
-              //   console.log('insert commit success')
-              // }
+              that.emit('ftsUpsert', that.msgQueue.length)
               resolve()
             })
           } catch (err) {
@@ -517,42 +480,22 @@ const fullText = (NimSdk: any) => {
       return new Promise((resolve, reject) => {
         this.searchDB.serialize(async () => {
           try {
-            // const stmt = this.searchDB.prepare(
-            //   'UPDATE `t1` SET `_id`=?,`text`=?,`sessionId`=?,`from`=?,`time`=? where `rowid`=?'
-            // )
             this.searchDB.exec('BEGIN TRANSACTION')
-            const sqls = msgs.map((msg: IMsg, index) => {
-              const sql =
-                `UPDATE \`t1\` SET` +
-                `\`_id\`='${msg._id}',` +
-                `\`text\`='${this.formatSQLText(msg.text)}',` +
-                `\`sessionId\`='${msg.sessionId}',` +
-                `\`from\`='${msg.from}',` +
-                `\`time\`='${msg.time}'` +
-                ` WHERE \`rowid\`='${msg.rowid}';`
-
-              this.searchDB.exec(sql, function (err) {
-                // 事件通知用户语句执行出错
-                if (err) {
-                  console.log('update exec error: ', err)
-                  that.emit('ftsError', sql)
+            msgs.map((msg: IMsg, index) => {
+              this.searchDB.run(`UPDATE \`t1\` SET \`_id=?\`, \`text\`=?, \`sessionId=\`=?, \`from\`=? \`time\`=? WHERE \`rowid\`=?;`,
+                msg._id, msg.text, msg.sessionId, msg.from, msg.time, msg.rowid, function (err) {
+                  if (err) {
+                    console.log(err)
+                  }
                 }
-                //   else {
-                //   console.log('update exec success')
-                // }
-              })
-              return `${msg._id}, ${msg.time}`
+              )
             })
-            this.searchDB.exec('COMMIT;', function (err) {
-              // console.log('执行消息对象：\n', sqls.join('\n'))
+            this.searchDB.exec('COMMIT TRANSACTION;', function (err) {
               if (err) {
                 console.log('update commit error: ', err)
                 return
               }
-              that.emit('ftsUpsert', sqls.length, that.msgQueue.length)
-              // else {
-              //   console.log('update commit success')
-              // }
+              that.emit('ftsUpsert', that.msgQueue.length)
               resolve()
             })
           } catch (err) {

@@ -13,7 +13,6 @@ module.exports = {
   ],
   plugins: ['@typescript-eslint', 'prettier'],
   rules: {
-    'prettier/prettier': 1,
     'sort-keys': 0,
     '@typescript-eslint/indent': 0,
     '@typescript-eslint/member-ordering': [
