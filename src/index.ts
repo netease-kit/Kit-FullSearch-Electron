@@ -8,7 +8,7 @@ import * as os from 'os'
 const sqlite3 = require('sqlite3').verbose()
 
 const tableColumn = [
-  '_id',
+  'id',
   'text',
   'sessionId',
   'from',
@@ -160,10 +160,82 @@ const fullText = (NimSdk: any) => {
     public async createTable(): Promise<void> {
       try {
         // simple 0 是为了禁止拼音
-        const column = tableColumn.map((item) => '`' + item + '`').join(', ')
-        await this.searchDB.run(
-          `CREATE VIRTUAL TABLE IF NOT EXISTS t1 USING fts5(${column}, tokenize = 'simple 0')`
-        )
+        this.searchDB.serialize(async () => {
+          await this.searchDB.run(`
+            CREATE TABLE IF NOT EXISTS "nim_msglog" (
+              "id"			INTEGER PRIMARY KEY AUTOINCREMENT,
+              "idClient"	TEXT NOT NULL UNIQUE,
+              "text"		TEXT,
+              "sessionId"	TEXT NOT NULL,
+              "from"		TEXT NOT NULL,
+              "time"		INTEGER NOT NULL,
+              "target"		NUMERIC NOT NULL,
+              "to"			TEXT NOT NULL,
+              "type"		TEXT,
+              "scene"		TEXT,
+              "idServer"	INTEGER NOT NULL,
+              "fromNick"	TEXT,
+              "content"		TEXT
+            );`
+          )
+          await this.searchDB.run(`
+            CREATE VIRTUAL TABLE IF NOT EXISTS nim_msglog_fts USING fts5(
+              [idClient] UNINDEXED,
+              [text],
+              [sessionId] UNINDEXED,
+              [from] UNINDEXED,
+              [time] UNINDEXED,
+              [target] UNINDEXED,
+              [to] UNINDEXED,
+              [type] UNINDEXED,
+              [scene] UNINDEXED,
+              [idServer] UNINDEXED,
+              [fromNick] UNINDEXED,
+              [content] UNINDEXED,
+              content = [nim_msglog], content_rowid = id, tokenize = 'simple 0'
+            );`
+          )
+          await this.searchDB.run(`
+            CREATE TRIGGER nim_msglog_ai AFTER INSERT ON nim_msglog 
+            BEGIN 
+              INSERT INTO nim_msglog_fts (
+                rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+              ) VALUES (
+                new.id,new.idClient,new.text,new.sessionId,new.[from],new.time,new.target,
+                new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
+              );
+            END;`
+          )
+          await this.searchDB.run(`
+            CREATE TRIGGER nim_msglog_ad AFTER DELETE ON nim_msglog
+            BEGIN
+              INSERT INTO nim_msglog_fts (
+                nim_msglog_fts,rowid,idClient,text,sessionId,[from],
+                time,target,[to],type,scene,idServer,fromNick,content
+              ) VALUES (
+                'delete',old.idClient,old.text,old.sessionId,old.[from],old.time,old.target,
+                old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
+              );
+            END;`
+          )
+          await this.searchDB.run(`
+            CREATE TRIGGER nim_msglog_au AFTER UPDATE ON nim_msglog
+            BEGIN
+              INSERT INTO nim_msglog_fts (
+                nim_msglog_fts,rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+              ) VALUES (
+                'delete',old.id,old.idClient,old.text,old.sessionId,old.[from],old.time,
+                old.target,old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
+              );
+              INSERT INTO nim_msglog_fts (rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+              ) VALUES (
+                new.id,new.idClient,new.text,new.sessionId,new.[from],
+                new.time,new.target,new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
+              );
+            END;`
+          )
+        })
+
       } catch (err) {
         this.ftLogFunc('create VIRTUAL table failed: ', err)
       }
@@ -438,7 +510,7 @@ const fullText = (NimSdk: any) => {
           try {
             this.searchDB.exec('BEGIN TRANSACTION;')
             msgs.map((msg, index) => {
-              this.searchDB.run(`INSERT OR IGNORE INTO \`t1\` VALUES(${column});`, [
+              this.searchDB.run(`INSERT OR IGNORE INTO \`nim_msglog\` VALUES(NULL,${column});`, [
                 msg._id,
                 msg.text,
                 msg.sessionId,
@@ -482,7 +554,7 @@ const fullText = (NimSdk: any) => {
           try {
             this.searchDB.exec('BEGIN TRANSACTION')
             msgs.map((msg: IMsg, index) => {
-              this.searchDB.run(`UPDATE \`t1\` SET \`_id=?\`, \`text\`=?, \`sessionId=\`=?, \`from\`=? \`time\`=? WHERE \`rowid\`=?;`,
+              this.searchDB.run(`UPDATE \`nim_msglog\` SET \`_id=?\`, \`text\`=?, \`sessionId=\`=?, \`from\`=? \`time\`=? WHERE \`rowid\`=?;`,
                 msg._id, msg.text, msg.sessionId, msg.from, msg.time, msg.rowid, function (err) {
                   if (err) {
                     console.log(err)
@@ -541,7 +613,7 @@ const fullText = (NimSdk: any) => {
     //     })
     //   const ids = fts.map((item) => `"${item._id}"`).join(',')
     //   const existRows = await this.searchDB.all(
-    //     `select rowid, _id from t1 where _id in (${ids})`
+    //     `select rowid, _id from nim_msglog where _id in (${ids})`
     //   )
     //   const existRowIds =
     //     existRows && existRows.length > 0 ? existRows.map((row) => row._id) : []
@@ -567,7 +639,7 @@ const fullText = (NimSdk: any) => {
     //           this.searchDB.exec('BEGIN TRANSACTION;')
     //           const sqls = inserts.map((msg, index) => {
     //             const sql =
-    //               `INSERT OR IGNORE INTO \`t1\` VALUES(` +
+    //               `INSERT OR IGNORE INTO \`nim_msglog\` VALUES(` +
     //               `'${msg._id}',` +
     //               `'${this.formatSQLText(msg.text)}',` +
     //               `'${msg.sessionId}',` +
@@ -619,12 +691,12 @@ const fullText = (NimSdk: any) => {
     //       this.searchDB.serialize(async () => {
     //         try {
     //           // const stmt = this.searchDB.prepare(
-    //           //   'UPDATE `t1` SET `_id`=?,`text`=?,`sessionId`=?,`from`=?,`time`=? where `rowid`=?'
+    //           //   'UPDATE `nim_msglog` SET `_id`=?,`text`=?,`sessionId`=?,`from`=?,`time`=? where `rowid`=?'
     //           // )
     //           this.searchDB.exec('BEGIN TRANSACTION')
     //           const sqls = updates.map((msg: IMsg, index) => {
     //             const sql =
-    //               `UPDATE \`t1\` SET` +
+    //               `UPDATE \`nim_msglog\` SET` +
     //               `\`_id\`='${msg._id}',` +
     //               `\`text\`='${this.formatSQLText(msg.text)}',` +
     //               `\`sessionId\`='${msg.sessionId}',` +
@@ -671,7 +743,7 @@ const fullText = (NimSdk: any) => {
       }
       try {
         // await this.searchDB.DELETE(ids)
-        await this.searchDB.run(`DELETE FROM t1 WHERE _id in (${idsString});`)
+        await this.searchDB.run(`DELETE FROM nim_msglog WHERE _id in (${idsString});`)
         this.ftLogFunc('deleteFts success', ids)
       } catch (error) {
         this.ftLogFunc('deleteFts fail: ', error)
@@ -682,14 +754,14 @@ const fullText = (NimSdk: any) => {
     public async clearAllFts(): Promise<void> {
       try {
         console.time('dropTable')
-        await this.searchDB.run('drop table if exists t1')
+        await this.searchDB.run('drop table if exists nim_msglog')
         console.timeEnd('dropTable')
         console.time('createTable')
         await this.createTable()
         console.timeEnd('createTable')
 
         // console.time('deleteTable')
-        // await this.searchDB.run('DELETE FROM t1;')
+        // await this.searchDB.run('DELETE FROM nim_msglog;')
         // console.timeEnd('deleteTable')
         this.ftLogFunc('clearAllFts success')
       } catch (error) {
@@ -746,7 +818,7 @@ const fullText = (NimSdk: any) => {
       end,
       queryOption = this.queryOption,
     }: IQueryParams): string {
-      // `select _id from t1 where text match simple_query('${params.text}') limit ${limit} offset 0;`
+      // `select _id from nim_msglog where text match simple_query('${params.text}') limit ${limit} offset 0;`
       const where: string[] = []
       if (text) {
         const queryText = this.formatSQLText(text)
@@ -778,7 +850,7 @@ const fullText = (NimSdk: any) => {
 
       let limitQuery = ''
       if (limit !== Infinity) {
-        limitQuery = `LIMIT ${limit} offset ${offset}`
+        limitQuery = `LIMIT ${limit} OFFSET ${offset}`
       }
       const column = tableColumn
         .slice(1)
@@ -786,7 +858,7 @@ const fullText = (NimSdk: any) => {
         .join(', ')
 
       const whereSQL = where.length > 0 ? `where ${where.join(' AND ')}` : ''
-      const sql = `select \`_id\` as \`idClient\`, ${column} from t1 ${whereSQL} GROUP BY \`idClient\` ${order} ${limitQuery}`
+      const sql = `SELECT \`idClient\`, ${column} from nim_msglog_fts ${whereSQL} ${order} ${limitQuery}`
       this.ftLogFunc('_handleQueryParams: ', sql)
       return sql
     }
