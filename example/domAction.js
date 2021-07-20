@@ -149,7 +149,7 @@ window.onload = (function () {
       }
     }
     else if (hasClass(target, 'j-write-indexdb')) {
-      window.test.writeDataInIndexDB(10000)
+      window.test.writeDataInIndexDB(50000)
     }
   })
 })()

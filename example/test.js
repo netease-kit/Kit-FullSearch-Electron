@@ -153,9 +153,8 @@ class Test {
     }
     console.log(TAG_NAME, '构造数据结束 ~')
 
-    console.time('插入FTS')
-    await window.nim.putFts(fts);
-    console.timeEnd('插入FTS')
+    console.time('插入FTS队列')
+    window.nim.putFts(fts);
 
     // this.searchDB.PUT(fts).then(() => {
     //   console.log(
