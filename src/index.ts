@@ -386,7 +386,7 @@ const fullText = (NimSdk: any) => {
       const fts = await this._getMsgsWithInsertAndUpdate(msgs)
 
       if (fts.length > 0) {
-        console.log('插入', fts.length, '条')
+        // console.log('插入', fts.length, '条')
         await this._doInsert(fts)
         isStock
           ? this.emit(
@@ -473,21 +473,24 @@ const fullText = (NimSdk: any) => {
                 msg.content
               ], function (err) {
                 if (err) {
-                  console.log(err, JSON.stringify(msg))
+                  // console.log(err, JSON.stringify(msg))
+                  that.emit('ftsError', err, JSON.stringify(msg))
                 }
               })
             })
             this.searchDB.exec('COMMIT;', function (err) {
               if (err) {
-                console.log('insert commit error: ', err)
+                // console.log('insert commit error: ', err)
+                that.emit('ftsError', err)
+                reject(err)
                 return
               }
-              that.emit('ftsUpsert', that.msgQueue.length)
+              // that.emit('ftsUpsert', that.msgQueue.length)
               resolve()
             })
           } catch (err) {
             this.searchDB.exec('ROLLBACK TRANSACTION;', function (err) {
-              console.log('rollback: ', err)
+              that.ftLogFunc('rollback: ', err)
             })
             reject(err)
           }
@@ -495,38 +498,38 @@ const fullText = (NimSdk: any) => {
       })
     }
 
-    async _doUpdate(msgs: IMsg[]): Promise<void> {
-      const that = this
-      return new Promise((resolve, reject) => {
-        this.searchDB.serialize(async () => {
-          try {
-            this.searchDB.exec('BEGIN TRANSACTION')
-            msgs.map((msg: IMsg, index) => {
-              this.searchDB.run(`UPDATE \`t1\` SET \`_id=?\`, \`text\`=?, \`sessionId=\`=?, \`from\`=? \`time\`=? WHERE \`rowid\`=?;`,
-                msg._id, msg.text, msg.sessionId, msg.from, msg.time, msg.rowid, function (err) {
-                  if (err) {
-                    console.log(err)
-                  }
-                }
-              )
-            })
-            this.searchDB.exec('COMMIT TRANSACTION;', function (err) {
-              if (err) {
-                console.log('update commit error: ', err)
-                return
-              }
-              that.emit('ftsUpsert', that.msgQueue.length)
-              resolve()
-            })
-          } catch (err) {
-            this.searchDB.exec('ROLLBACK TRANSACTION', function (err) {
-              console.log('rollback: ', err)
-            })
-            reject(err)
-          }
-        })
-      })
-    }
+    // async _doUpdate(msgs: IMsg[]): Promise<void> {
+    //   const that = this
+    //   return new Promise((resolve, reject) => {
+    //     this.searchDB.serialize(async () => {
+    //       try {
+    //         this.searchDB.exec('BEGIN TRANSACTION')
+    //         msgs.map((msg: IMsg, index) => {
+    //           this.searchDB.run(`UPDATE \`t1\` SET \`_id=?\`, \`text\`=?, \`sessionId=\`=?, \`from\`=? \`time\`=? WHERE \`rowid\`=?;`,
+    //             msg._id, msg.text, msg.sessionId, msg.from, msg.time, msg.rowid, function (err) {
+    //               if (err) {
+    //                 console.log(err)
+    //               }
+    //             }
+    //           )
+    //         })
+    //         this.searchDB.exec('COMMIT TRANSACTION;', function (err) {
+    //           if (err) {
+    //             console.log('update commit error: ', err)
+    //             return
+    //           }
+    //           that.emit('ftsUpsert', that.msgQueue.length)
+    //           resolve()
+    //         })
+    //       } catch (err) {
+    //         this.searchDB.exec('ROLLBACK TRANSACTION', function (err) {
+    //           console.log('rollback: ', err)
+    //         })
+    //         reject(err)
+    //       }
+    //     })
+    //   })
+    // }
 
     // public async putFts(msgs: IMsg | IMsg[]): Promise<void> {
     //   // let msgs = this.msgQueue.splice(0, 1000)
