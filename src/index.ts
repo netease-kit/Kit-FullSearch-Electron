@@ -37,6 +37,7 @@ const fullText = (NimSdk: any) => {
     searchDBName: string
     searchDBPath: string
     fullSearchCutFunc?: (text: string) => string[]
+    msgStockQueue: any[]
     msgQueue: any[]
     timeout: number
 
@@ -76,6 +77,7 @@ const fullText = (NimSdk: any) => {
       this.searchDBName = searchDBName || `${account}-${appKey}`
       this.searchDBPath = searchDBPath || ''
       this.msgQueue = []
+      this.msgStockQueue = []
       this.timeout = 0
       if (fullSearchCutFunc) {
         this.fullSearchCutFunc = fullSearchCutFunc
@@ -405,7 +407,7 @@ const fullText = (NimSdk: any) => {
       const msgs: IMsg[] = obj.msgs
 
       if (msgs && msgs.length > 0) {
-        this.putFts(msgs || [])
+        this.putFts(msgs || [], true)
       }
 
       opt.done && opt.done(null, obj)
@@ -429,30 +431,44 @@ const fullText = (NimSdk: any) => {
       }
     }
 
-    public putFts(msgs: IMsg | IMsg[]): void {
-      if (Array.isArray(msgs)) {
-        this.msgQueue = this.msgQueue.concat(msgs)
+    public putFts(msgs: IMsg | IMsg[], isStock = false): void {
+      if (!Array.isArray(msgs)) {
+        msgs = [msgs]
+      }
+      if (isStock) {
+        this.msgStockQueue = this.msgStockQueue.concat(msgs)
       } else {
-        this.msgQueue.push(msgs)
+        this.msgQueue = this.msgQueue.concat(msgs)
       }
       // 设置定时器，开始同步
       if (!this.timeout) {
         this.timeout = (setTimeout(() => {
-          this._putFts()
+          this._putFts(isStock)
         }, 0) as unknown) as number
       }
     }
 
-    async _putFts(): Promise<void> {
+    async _putFts(isStock = false): Promise<void> {
       console.time('一批 3000 个putFts耗时')
-      const msgs = this.msgQueue.splice(0, 3000)
+      const msgs = isStock
+        ? this.msgStockQueue.splice(0, 3000)
+        : this.msgQueue.splice(0, 3000)
 
       // const { inserts, updates } = await this._getMsgsWithInsertAndUpdate(msgs)
       const fts = await this._getMsgsWithInsertAndUpdate(msgs)
 
       if (fts.length > 0) {
-        console.log('插入', fts.length, '条')
+        // console.log('插入', fts.length, '条')
         await this._doInsert(fts)
+        isStock
+          ? this.emit(
+            'ftsStockUpsert',
+            fts.length,
+            this.msgQueue.length,
+            this.msgStockQueue.length,
+            fts[fts.length - 1].time
+          )
+          : this.emit('ftsUpsert', fts.length, this.msgQueue.length)
       }
 
       // if (updates.length > 0) {
@@ -461,10 +477,14 @@ const fullText = (NimSdk: any) => {
       // }
 
       // 队列里还存在未同步的，那么继续定时执行
-      if (this.msgQueue.length > 0) {
+      if (this.msgStockQueue.length > 0) {
+        this.timeout = (setTimeout(() => {
+          this._putFts(true)
+        }, 100) as unknown) as number
+      } else if (this.msgQueue.length > 0) {
         this.timeout = (setTimeout(() => {
           this._putFts()
-        }, 0) as unknown) as number
+        }, 100) as unknown) as number
       } else {
         this.timeout = 0
       }
@@ -525,214 +545,27 @@ const fullText = (NimSdk: any) => {
                 msg.content
               ], function (err) {
                 if (err) {
-                  console.log(err, JSON.stringify(msg))
+                  that.emit('ftsError', err, JSON.stringify(msg))
                 }
               })
             })
             this.searchDB.exec('COMMIT;', function (err) {
               if (err) {
-                console.log('insert commit error: ', err)
+                that.emit('ftsError', err)
+                reject(err)
                 return
               }
-              that.emit('ftsUpsert', that.msgQueue.length)
               resolve()
             })
           } catch (err) {
             this.searchDB.exec('ROLLBACK TRANSACTION;', function (err) {
-              console.log('rollback: ', err)
+              that.ftLogFunc('rollback: ', err)
             })
             reject(err)
           }
         })
       })
     }
-
-    async _doUpdate(msgs: IMsg[]): Promise<void> {
-      const that = this
-      return new Promise((resolve, reject) => {
-        this.searchDB.serialize(async () => {
-          try {
-            this.searchDB.exec('BEGIN TRANSACTION')
-            msgs.map((msg: IMsg, index) => {
-              this.searchDB.run(`UPDATE \`nim_msglog\` SET \`_id=?\`, \`text\`=?, \`sessionId=\`=?, \`from\`=? \`time\`=? WHERE \`rowid\`=?;`,
-                msg._id, msg.text, msg.sessionId, msg.from, msg.time, msg.rowid, function (err) {
-                  if (err) {
-                    console.log(err)
-                  }
-                }
-              )
-            })
-            this.searchDB.exec('COMMIT TRANSACTION;', function (err) {
-              if (err) {
-                console.log('update commit error: ', err)
-                return
-              }
-              that.emit('ftsUpsert', that.msgQueue.length)
-              resolve()
-            })
-          } catch (err) {
-            this.searchDB.exec('ROLLBACK TRANSACTION', function (err) {
-              console.log('rollback: ', err)
-            })
-            reject(err)
-          }
-        })
-      })
-    }
-
-    // public async putFts(msgs: IMsg | IMsg[]): Promise<void> {
-    //   // let msgs = this.msgQueue.splice(0, 1000)
-    //   if (!Array.isArray(msgs)) {
-    //     msgs = [msgs]
-    //   }
-    //   // 去重
-    //   const map = msgs.reduce((total, next) => {
-    //     if (next.idClient) {
-    //       total[next.idClient] = next
-    //     }
-    //     return total
-    //   }, {})
-    //   msgs = Object.keys(map).map((key) => map[key])
-    //   const fts = msgs
-    //     .filter((msg) => msg.text && msg.idClient)
-    //     .map((msg) => {
-    //       return {
-    //         _id: msg.idClient,
-    //         text: msg.text,
-    //         sessionId: msg.sessionId,
-    //         from: msg.from,
-    //         time: msg.time,
-    //         target: msg.target,
-    //         to: msg.to,
-    //         type: msg.type,
-    //         scene: msg.scene,
-    //         idServer: msg.idServer,
-    //         fromNick: msg.fromNick,
-    //         content: msg.content,
-    //       }
-    //     })
-    //   const ids = fts.map((item) => `"${item._id}"`).join(',')
-    //   const existRows = await this.searchDB.all(
-    //     `select rowid, _id from nim_msglog where _id in (${ids})`
-    //   )
-    //   const existRowIds =
-    //     existRows && existRows.length > 0 ? existRows.map((row) => row._id) : []
-    //   const updates: any[] = []
-    //   const inserts: any[] = []
-    //   fts.forEach((item) => {
-    //     const idx = existRowIds.indexOf(item._id)
-    //     if (idx === -1) {
-    //       inserts.push(item)
-    //     } else {
-    //       updates.push({
-    //         ...item,
-    //         rowid: existRows[idx].rowid,
-    //       })
-    //     }
-    //   })
-
-    //   if (inserts.length > 0) {
-    //     console.log('插入', inserts.length, '条')
-    //     await new Promise((resolve, reject) => {
-    //       this.searchDB.serialize(async () => {
-    //         try {
-    //           this.searchDB.exec('BEGIN TRANSACTION;')
-    //           const sqls = inserts.map((msg, index) => {
-    //             const sql =
-    //               `INSERT OR IGNORE INTO \`nim_msglog\` VALUES(` +
-    //               `'${msg._id}',` +
-    //               `'${this.formatSQLText(msg.text)}',` +
-    //               `'${msg.sessionId}',` +
-    //               `'${msg.from}',` +
-    //               `'${msg.time}',` +
-    //               `'${msg.target}',` +
-    //               `'${msg.to}',` +
-    //               `'${msg.type}',` +
-    //               `'${msg.scene}',` +
-    //               `'${msg.idServer}',` +
-    //               `'${msg.fromNick}',` +
-    //               `'${this.formatSQLText(msg.content || '')}'` +
-    //               `)`
-    //             // if (index === 1) {
-    //             //   insertSQL += '))'
-    //             // }
-    //             this.searchDB.exec(sql, function (err) {
-    //               if (err) {
-    //                 console.log('insert exec error: ', err)
-    //               } else {
-    //                 console.log('insert exec success')
-    //               }
-    //             })
-    //             // return sql
-    //             return `${msg._id}, ${msg.time}`
-    //           })
-    //           this.searchDB.exec('COMMIT;', function (err) {
-    //             console.log('执行消息对象：\n', sqls.join('\n'))
-    //             if (err) {
-    //               console.log('insert commit error: ', err)
-    //             } else {
-    //               console.log('insert commit success')
-    //             }
-    //             resolve(null)
-    //           })
-    //         } catch (err) {
-    //           this.searchDB.exec('ROLLBACK TRANSACTION;', function (err) {
-    //             console.log('rollback: ', err)
-    //           })
-    //           reject(err)
-    //         }
-    //       })
-    //     })
-    //   }
-
-    //   if (updates.length > 0) {
-    //     console.log('修改', updates.length, '条')
-    //     await new Promise((resolve, reject) => {
-    //       this.searchDB.serialize(async () => {
-    //         try {
-    //           // const stmt = this.searchDB.prepare(
-    //           //   'UPDATE `nim_msglog` SET `_id`=?,`text`=?,`sessionId`=?,`from`=?,`time`=? where `rowid`=?'
-    //           // )
-    //           this.searchDB.exec('BEGIN TRANSACTION')
-    //           const sqls = updates.map((msg: IMsg, index) => {
-    //             const sql =
-    //               `UPDATE \`nim_msglog\` SET` +
-    //               `\`_id\`='${msg._id}',` +
-    //               `\`text\`='${this.formatSQLText(msg.text)}',` +
-    //               `\`sessionId\`='${msg.sessionId}',` +
-    //               `\`from\`='${msg.from}',` +
-    //               `\`time\`='${msg.time}'` +
-    //               ` WHERE \`rowid\`='${msg.rowid}';`
-
-    //             this.searchDB.exec(sql, function (err) {
-    //               // 事件通知用户语句执行出错
-    //               if (err) {
-    //                 console.log('update exec error: ', err)
-    //               } else {
-    //                 console.log('update exec success')
-    //               }
-    //             })
-    //             return `${msg._id}, ${msg.time}`
-    //           })
-    //           this.searchDB.exec('COMMIT;', function (err) {
-    //             console.log('执行消息对象：\n', sqls.join('\n'))
-    //             if (err) {
-    //               console.log('update commit error: ', err)
-    //             } else {
-    //               console.log('update commit success')
-    //             }
-    //             resolve(null)
-    //           })
-    //         } catch (err) {
-    //           this.searchDB.exec('ROLLBACK TRANSACTION', function (err) {
-    //             console.log('rollback: ', err)
-    //           })
-    //           reject(err)
-    //         }
-    //       })
-    //     })
-    //   }
-    // }
 
     public async deleteFts(ids: string | string[]): Promise<void> {
       let idsString = ''
@@ -788,22 +621,6 @@ const fullText = (NimSdk: any) => {
         })
       FullTextNim.instance = null
       super.destroy(...args)
-    }
-
-    _getLocalMsgsByIdClients(idClients: any): Promise<any> {
-      return new Promise((resolve, reject) => {
-        super.getLocalMsgsByIdClients({
-          idClients,
-          done: (err: any, obj: any) => {
-            if (err) {
-              this.ftLogFunc('_getLocalMsgsByIdClients fail: ', err)
-              return reject(err)
-            }
-            this.ftLogFunc('_getLocalMsgsByIdClients success', obj)
-            resolve(obj)
-          },
-        })
-      })
     }
 
     // 处理QUERY参数

@@ -14,7 +14,7 @@ export interface IFullTextNim {
   putFts(msgs: IMsg | IMsg[]): void
   _putFts(): Promise<void>
   _doInsert(msgs: IMsg[]): Promise<void>
-  _doUpdate(msgs: IMsg[]): Promise<void>
+  // _doUpdate(msgs: IMsg[]): Promise<void>
   deleteFts(ids: string | string[]): Promise<void>
   clearAllFts(): Promise<void>
   destroy(...args: any): void
