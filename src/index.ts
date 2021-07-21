@@ -109,6 +109,9 @@ const fullText = (NimSdk: any) => {
       await this.createTable()
       await this.loadDict()
       // console.log(this.searchDB.close())
+
+      // 检查 db，异步检查即可
+      this.checkDbSafe()
     }
 
     public async loadExtension(filePath?: string): Promise<void> {
@@ -153,6 +156,18 @@ const fullText = (NimSdk: any) => {
       } catch (err) {
         this.ftLogFunc('failed to load jieba dict: ', err)
       }
+    }
+
+    public async checkDbSafe(): Promise<void> {
+      try {
+        await this.searchDB.run(`INSERT INTO t1(t1) VALUES('integrity-check');`)
+      } catch (err) {
+        this.emit('ftsDamaged', err)
+      }
+    }
+
+    public async rebuildDbIndex(): Promise<void> {
+      await this.searchDB.run(`INSERT INTO t1(t1) VALUES('rebuild');`)
     }
 
     public formatSQLText(src: string): string {
@@ -245,6 +260,7 @@ const fullText = (NimSdk: any) => {
 
       } catch (err) {
         this.ftLogFunc('create VIRTUAL table failed: ', err)
+        this.emit('ftsError', err)
       }
     }
 
@@ -591,12 +607,8 @@ const fullText = (NimSdk: any) => {
 
     public async clearAllFts(): Promise<void> {
       try {
-        console.time('dropTable')
         await this.searchDB.run('drop table if exists nim_msglog')
-        console.timeEnd('dropTable')
-        console.time('createTable')
         await this.createTable()
-        console.timeEnd('createTable')
 
         // console.time('deleteTable')
         // await this.searchDB.run('DELETE FROM nim_msglog;')

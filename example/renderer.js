@@ -140,8 +140,12 @@ NIM.getInstance({
   },
 }).then((nim) => {
   window.nim = nim
-  nim.on('ftsError', function (sql) {
-    console.log('sql 执行出错', sql)
+  nim.on('ftsDamaged', function (err) {
+    console.log('数据库已经损毁，请调用 rebuildDbIndex 修复', err)
+    nim.rebuildDbIndex()
+  })
+  nim.on('ftsError', function (err) {
+    console.log('sql 执行出错', err)
   })
   nim.on('ftsUpsert', function (excuteRow, restRow) {
     console.log('upsert 进行中，已执行 ', excuteRow, ' 还剩下 ', restRow)
