@@ -37,6 +37,7 @@ const fullText = (NimSdk: any) => {
     searchDBName: string
     searchDBPath: string
     fullSearchCutFunc?: (text: string) => string[]
+    msgStockQueue: any[]
     msgQueue: any[]
     timeout: number
 
@@ -76,6 +77,7 @@ const fullText = (NimSdk: any) => {
       this.searchDBName = searchDBName || `${account}-${appKey}`
       this.searchDBPath = searchDBPath || ''
       this.msgQueue = []
+      this.msgStockQueue = []
       this.timeout = 0
       if (fullSearchCutFunc) {
         this.fullSearchCutFunc = fullSearchCutFunc
@@ -333,7 +335,7 @@ const fullText = (NimSdk: any) => {
       const msgs: IMsg[] = obj.msgs
 
       if (msgs && msgs.length > 0) {
-        this.putFts(msgs || [])
+        this.putFts(msgs || [], true)
       }
 
       opt.done && opt.done(null, obj)
@@ -357,23 +359,28 @@ const fullText = (NimSdk: any) => {
       }
     }
 
-    public putFts(msgs: IMsg | IMsg[]): void {
-      if (Array.isArray(msgs)) {
-        this.msgQueue = this.msgQueue.concat(msgs)
+    public putFts(msgs: IMsg | IMsg[], isStock = false): void {
+      if (!Array.isArray(msgs)) {
+        msgs = [msgs]
+      }
+      if (isStock) {
+        this.msgStockQueue = this.msgStockQueue.concat(msgs)
       } else {
-        this.msgQueue.push(msgs)
+        this.msgQueue = this.msgQueue.concat(msgs)
       }
       // 设置定时器，开始同步
       if (!this.timeout) {
         this.timeout = (setTimeout(() => {
-          this._putFts()
+          this._putFts(isStock)
         }, 0) as unknown) as number
       }
     }
 
-    async _putFts(): Promise<void> {
+    async _putFts(isStock = false): Promise<void> {
       console.time('一批 3000 个putFts耗时')
-      const msgs = this.msgQueue.splice(0, 3000)
+      const msgs = isStock
+        ? this.msgStockQueue.splice(0, 3000)
+        : this.msgQueue.splice(0, 3000)
 
       // const { inserts, updates } = await this._getMsgsWithInsertAndUpdate(msgs)
       const fts = await this._getMsgsWithInsertAndUpdate(msgs)
@@ -381,6 +388,15 @@ const fullText = (NimSdk: any) => {
       if (fts.length > 0) {
         console.log('插入', fts.length, '条')
         await this._doInsert(fts)
+        isStock
+          ? this.emit(
+              'ftsStockUpsert',
+              fts.length,
+              this.msgQueue.length,
+              this.msgStockQueue.length,
+              fts[fts.length - 1].time
+            )
+          : this.emit('ftsUpsert', fts.length, this.msgQueue.length)
       }
 
       // if (updates.length > 0) {
@@ -389,10 +405,14 @@ const fullText = (NimSdk: any) => {
       // }
 
       // 队列里还存在未同步的，那么继续定时执行
-      if (this.msgQueue.length > 0) {
+      if (this.msgStockQueue.length > 0) {
+        this.timeout = (setTimeout(() => {
+          this._putFts(true)
+        }, 100) as unknown) as number
+      } else if (this.msgQueue.length > 0) {
         this.timeout = (setTimeout(() => {
           this._putFts()
-        }, 0) as unknown) as number
+        }, 100) as unknown) as number
       } else {
         this.timeout = 0
       }
@@ -716,22 +736,6 @@ const fullText = (NimSdk: any) => {
         })
       FullTextNim.instance = null
       super.destroy(...args)
-    }
-
-    _getLocalMsgsByIdClients(idClients: any): Promise<any> {
-      return new Promise((resolve, reject) => {
-        super.getLocalMsgsByIdClients({
-          idClients,
-          done: (err: any, obj: any) => {
-            if (err) {
-              this.ftLogFunc('_getLocalMsgsByIdClients fail: ', err)
-              return reject(err)
-            }
-            this.ftLogFunc('_getLocalMsgsByIdClients success', obj)
-            resolve(obj)
-          },
-        })
-      })
     }
 
     // 处理QUERY参数
