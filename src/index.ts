@@ -160,14 +160,14 @@ const fullText = (NimSdk: any) => {
 
     public async checkDbSafe(): Promise<void> {
       try {
-        await this.searchDB.run(`INSERT INTO t1(t1) VALUES('integrity-check');`)
+        await this.searchDB.run(`INSERT INTO nim_msglog_fts(nim_msglog_fts) VALUES('integrity-check');`)
       } catch (err) {
         this.emit('ftsDamaged', err)
       }
     }
 
     public async rebuildDbIndex(): Promise<void> {
-      await this.searchDB.run(`INSERT INTO t1(t1) VALUES('rebuild');`)
+      await this.searchDB.run(`INSERT INTO nim_msglog_fts(nim_msglog_fts) VALUES('rebuild');`)
     }
 
     public formatSQLText(src: string): string {
@@ -177,87 +177,80 @@ const fullText = (NimSdk: any) => {
     public async createTable(): Promise<void> {
       try {
         // simple 0 是为了禁止拼音
-        this.searchDB.serialize(async () => {
-          await this.searchDB.run(`
-            CREATE TABLE IF NOT EXISTS "nim_msglog" (
-              "id"			INTEGER PRIMARY KEY AUTOINCREMENT,
-              "idClient"	TEXT NOT NULL UNIQUE,
-              "text"		TEXT,
-              "sessionId"	TEXT NOT NULL,
-              "from"		TEXT NOT NULL,
-              "time"		INTEGER NOT NULL,
-              "target"		NUMERIC NOT NULL,
-              "to"			TEXT NOT NULL,
-              "type"		TEXT,
-              "scene"		TEXT,
-              "idServer"	INTEGER NOT NULL,
-              "fromNick"	TEXT,
-              "content"		TEXT
-            );`, (err) => {
-            this.emit('ftsError', err)
-          })
-          await this.searchDB.run(`
-            CREATE VIRTUAL TABLE IF NOT EXISTS nim_msglog_fts USING fts5(
-              [idClient] UNINDEXED,
-              [text],
-              [sessionId] UNINDEXED,
-              [from] UNINDEXED,
-              [time] UNINDEXED,
-              [target] UNINDEXED,
-              [to] UNINDEXED,
-              [type] UNINDEXED,
-              [scene] UNINDEXED,
-              [idServer] UNINDEXED,
-              [fromNick] UNINDEXED,
-              [content] UNINDEXED,
-              content = [nim_msglog], content_rowid = id, tokenize = 'simple 0'
-            );`, (err) => {
-            this.emit('ftsError', err)
-          })
-          await this.searchDB.run(`
-            CREATE TRIGGER nim_msglog_ai AFTER INSERT ON nim_msglog 
-            BEGIN 
-              INSERT INTO nim_msglog_fts (
-                rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
-              ) VALUES (
-                new.id,new.idClient,new.text,new.sessionId,new.[from],new.time,new.target,
-                new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
-              );
-            END;`, (err) => {
-            this.emit('ftsError', err)
-          })
-          await this.searchDB.run(`
-            CREATE TRIGGER nim_msglog_ad AFTER DELETE ON nim_msglog
-            BEGIN
-              INSERT INTO nim_msglog_fts (
-                nim_msglog_fts,rowid,idClient,text,sessionId,[from],
-                time,target,[to],type,scene,idServer,fromNick,content
-              ) VALUES (
-                'delete',old.idClient,old.text,old.sessionId,old.[from],old.time,old.target,
-                old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
-              );
-            END;`, (err) => {
-            this.emit('ftsError', err)
-          })
-          await this.searchDB.run(`
-            CREATE TRIGGER nim_msglog_au AFTER UPDATE ON nim_msglog
-            BEGIN
-              INSERT INTO nim_msglog_fts (
-                nim_msglog_fts,rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
-              ) VALUES (
-                'delete',old.id,old.idClient,old.text,old.sessionId,old.[from],old.time,
-                old.target,old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
-              );
-              INSERT INTO nim_msglog_fts (rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
-              ) VALUES (
-                new.id,new.idClient,new.text,new.sessionId,new.[from],
-                new.time,new.target,new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
-              );
-            END;`, (err) => {
-            this.emit('ftsError', err)
-          })
-        })
-
+        await this.searchDB.run(`
+          CREATE TABLE IF NOT EXISTS "nim_msglog" (
+            "id"        INTEGER PRIMARY KEY AUTOINCREMENT,
+            "idClient"  TEXT NOT NULL UNIQUE,
+            "text"      TEXT,
+            "sessionId" TEXT NOT NULL,
+            "from"      TEXT NOT NULL,
+            "time"      INTEGER NOT NULL,
+            "target"    NUMERIC NOT NULL,
+            "to"        TEXT NOT NULL,
+            "type"      TEXT,
+            "scene"     TEXT,
+            "idServer"  INTEGER NOT NULL,
+            "fromNick"  TEXT,
+            "content"   TEXT
+          );`
+        )
+        await this.searchDB.run(`
+          CREATE VIRTUAL TABLE IF NOT EXISTS nim_msglog_fts USING fts5(
+            [idClient] UNINDEXED,
+            [text],
+            [sessionId] UNINDEXED,
+            [from] UNINDEXED,
+            [time] UNINDEXED,
+            [target] UNINDEXED,
+            [to] UNINDEXED,
+            [type] UNINDEXED,
+            [scene] UNINDEXED,
+            [idServer] UNINDEXED,
+            [fromNick] UNINDEXED,
+            [content] UNINDEXED,
+            content = [nim_msglog], content_rowid = id, tokenize = 'simple 0'
+          );`
+        )
+        await this.searchDB.run(`
+          CREATE TRIGGER nim_msglog_ai AFTER INSERT ON nim_msglog 
+          BEGIN 
+            INSERT INTO nim_msglog_fts (
+              rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+            ) VALUES (
+              new.id,new.idClient,new.text,new.sessionId,new.[from],new.time,new.target,
+              new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
+            );
+          END;`
+        )
+        await this.searchDB.run(`
+          CREATE TRIGGER nim_msglog_ad AFTER DELETE ON nim_msglog
+          BEGIN
+            INSERT INTO nim_msglog_fts (
+              nim_msglog_fts,rowid,idClient,text,sessionId,[from],
+              time,target,[to],type,scene,idServer,fromNick,content
+            ) VALUES (
+              'delete',old.idClient,old.text,old.sessionId,old.[from],old.time,old.target,
+              old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
+            );
+          END;`
+        )
+        await this.searchDB.run(`
+          CREATE TRIGGER nim_msglog_au AFTER UPDATE ON nim_msglog
+          BEGIN
+            INSERT INTO nim_msglog_fts (
+              nim_msglog_fts,rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+            ) VALUES (
+              'delete',old.id,old.idClient,old.text,old.sessionId,old.[from],old.time,
+              old.target,old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
+            );
+            INSERT INTO nim_msglog_fts (
+              rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+            ) VALUES (
+              new.id,new.idClient,new.text,new.sessionId,new.[from],
+              new.time,new.target,new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
+            );
+          END;`
+        )
       } catch (err) {
         this.ftLogFunc('create VIRTUAL table failed: ', err)
         this.emit('ftsError', err)
@@ -564,11 +557,7 @@ const fullText = (NimSdk: any) => {
                 msg.idServer,
                 msg.fromNick,
                 msg.content
-              ], function (err) {
-                if (err) {
-                  that.emit('ftsError', err, JSON.stringify(msg))
-                }
-              })
+              ])
             })
             this.searchDB.exec('COMMIT;', function (err) {
               if (err) {
