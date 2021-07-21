@@ -178,8 +178,9 @@ const fullText = (NimSdk: any) => {
               "idServer"	INTEGER NOT NULL,
               "fromNick"	TEXT,
               "content"		TEXT
-            );`
-          )
+            );`, (err) => {
+            this.emit('ftsError', err)
+          })
           await this.searchDB.run(`
             CREATE VIRTUAL TABLE IF NOT EXISTS nim_msglog_fts USING fts5(
               [idClient] UNINDEXED,
@@ -195,8 +196,9 @@ const fullText = (NimSdk: any) => {
               [fromNick] UNINDEXED,
               [content] UNINDEXED,
               content = [nim_msglog], content_rowid = id, tokenize = 'simple 0'
-            );`
-          )
+            );`, (err) => {
+            this.emit('ftsError', err)
+          })
           await this.searchDB.run(`
             CREATE TRIGGER nim_msglog_ai AFTER INSERT ON nim_msglog 
             BEGIN 
@@ -206,8 +208,9 @@ const fullText = (NimSdk: any) => {
                 new.id,new.idClient,new.text,new.sessionId,new.[from],new.time,new.target,
                 new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
               );
-            END;`
-          )
+            END;`, (err) => {
+            this.emit('ftsError', err)
+          })
           await this.searchDB.run(`
             CREATE TRIGGER nim_msglog_ad AFTER DELETE ON nim_msglog
             BEGIN
@@ -218,8 +221,9 @@ const fullText = (NimSdk: any) => {
                 'delete',old.idClient,old.text,old.sessionId,old.[from],old.time,old.target,
                 old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
               );
-            END;`
-          )
+            END;`, (err) => {
+            this.emit('ftsError', err)
+          })
           await this.searchDB.run(`
             CREATE TRIGGER nim_msglog_au AFTER UPDATE ON nim_msglog
             BEGIN
@@ -234,8 +238,9 @@ const fullText = (NimSdk: any) => {
                 new.id,new.idClient,new.text,new.sessionId,new.[from],
                 new.time,new.target,new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
               );
-            END;`
-          )
+            END;`, (err) => {
+            this.emit('ftsError', err)
+          })
         })
 
       } catch (err) {
