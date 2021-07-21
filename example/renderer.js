@@ -151,6 +151,7 @@ NIM.getInstance({
     console.log('upsert 进行中，已执行 ', excuteRow, ' 还剩下 ', restRow)
   })
   nim.on('ftsStockUpsert', function (excuteRow, otherRow, restRow, lastTime) {
+    console.log('同步进度：', 100 - restRow / window.total * 100)
     console.log(`upsert 存量数据任务进行中，已执行 ${excuteRow} 条, 另外一个消息队列目前拥有 ${otherRow} 条, 存量数据队列还剩下 ${restRow} 条, 上一条同步的时间是 ${lastTime} `)
   })
 })

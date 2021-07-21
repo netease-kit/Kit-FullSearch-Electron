@@ -135,6 +135,7 @@ window.onload = (function () {
     // 同步消息
     else if (hasClass(target, 'j-sync')) {
       if (window.nim && window.nim.getLocalMsgsToFts) {
+        window.total = 0;
         doSyncByLimit();
       } else {
         console.error('无数据库')
@@ -142,6 +143,7 @@ window.onload = (function () {
     }
     else if (hasClass(target, 'j-syncall')) {
       if (window.nim && window.nim.getLocalMsgsToFts) {
+        window.total = 0;
         doSyncAll();
       } else {
         console.error('无数据库')
@@ -149,6 +151,13 @@ window.onload = (function () {
     }
     else if (hasClass(target, 'j-write-indexdb')) {
       window.test.writeDataInIndexDB(50000)
+    }
+    else if (hasClass(target, 'j-write-indexdb-ascii')) {
+      let txt = ''
+      for (let j = 0; j < 127; j++) {
+        txt += String.fromCodePoint(j)
+      }
+      window.test.writeDataInIndexDB(1, txt)
     }
   })
 })()
@@ -167,8 +176,9 @@ function doSyncByLimit(start = 0) {
       //   '结束时间 ' + new Date(end),
       //   // '共 ' + obj.msgs && obj.msgs.length + ' 条'
       // )
+      
       if (obj.msgs && obj.msgs.length > 0) {
-        var time = obj.msgs[obj.msgs.length - 1].time
+        window.total += obj.msgs.length;
         // console.timeEnd('doSyncByLimit')
         doSyncByLimit(time)
       }
@@ -185,6 +195,9 @@ function doSyncAll(end = new Date().getTime()) {
     types: ['text', 'custom'], // 只针对文本消息和自定义消息
     limit: Infinity,
     done(error, obj) {
+      if (obj.msgs && obj.msgs.length > 0) {
+        window.total += obj.msgs.length;
+      }
     },
   })
 }
