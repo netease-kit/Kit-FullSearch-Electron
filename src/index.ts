@@ -424,15 +424,18 @@ const fullText = (NimSdk: any) => {
 
     public async queryFts(params: IQueryParams): Promise<any> {
       try {
-        // 入参过滤，去除多余的符号
-        // text 就简单替换 ' 这种字符，换掉把
+        // 入参过滤，去除多余的符号，text 替换 ' 字符
         if (params.text) {
           const reg = /[^\u4e00-\u9fa5^a-z^A-Z^0-9]/g
           params.text = params.text.replace(reg, ' ').trim()
         }
-
+        let records: Array<any> = []
+        // 如果替换后字符串为空则不走查询逻辑
+        if (params.text.length === 0) {
+          return records
+        }
         const sql = this._handleQueryParams(params)
-        const records = await this.searchDB.all(sql)
+        records = await this.searchDB.all(sql)
         return records
       } catch (error) {
         this.ftLogFunc('queryFts fail: ', error)
@@ -637,7 +640,6 @@ const fullText = (NimSdk: any) => {
       end,
       queryOption = this.queryOption,
     }: IQueryParams): string {
-      // `select _id from nim_msglog where text match simple_query('${params.text}') limit ${limit} offset 0;`
       const where: string[] = []
       if (text) {
         const queryText = this.formatSQLText(text)
