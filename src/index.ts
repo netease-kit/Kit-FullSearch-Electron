@@ -576,7 +576,7 @@ const fullText = (NimSdk: any) => {
       }
       try {
         // await this.searchDB.DELETE(ids)
-        await this.searchDB.run(`DELETE FROM nim_msglog WHERE _id in (${idsString});`)
+        await this.searchDB.run(`DELETE FROM nim_msglog WHERE idClient in (${idsString});`)
         this.ftLogFunc('deleteFts success', ids)
       } catch (error) {
         this.ftLogFunc('deleteFts fail: ', error)
