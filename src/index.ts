@@ -100,15 +100,11 @@ const fullText = (NimSdk: any) => {
           resolve(db)
         })
       })
-      // console.log(this.searchDB.run)
-      // console.log(this.searchDB.all)
       this.searchDB.run = promisify(this.searchDB.run, this.searchDB)
-      // this.searchDB.close = promisify(this.searchDB.close, this.searchDB)
       this.searchDB.all = promisify(this.searchDB.all, this.searchDB)
       await this.loadExtension()
       await this.createTable()
       await this.loadDict()
-      // console.log(this.searchDB.close())
 
       // 检查 db，异步检查即可
       this.checkDbSafe()
@@ -151,7 +147,6 @@ const fullText = (NimSdk: any) => {
         const dictPath = path
           .join(resourcePath, 'dict')
           .concat(process.platform === 'win32' ? '\\' : '/')
-        // console.log(dictPath)
         await this.searchDB.run(`SELECT jieba_dict("${dictPath}")`)
       } catch (err) {
         this.ftLogFunc('failed to load jieba dict: ', err)
@@ -463,7 +458,6 @@ const fullText = (NimSdk: any) => {
     }
 
     async _putFts(isStock = false): Promise<void> {
-      console.time('一批 3000 个putFts耗时')
       const msgs = isStock
         ? this.msgStockQueue.splice(0, 3000)
         : this.msgQueue.splice(0, 3000)
@@ -472,7 +466,6 @@ const fullText = (NimSdk: any) => {
       const fts = await this._getMsgsWithInsertAndUpdate(msgs)
 
       if (fts.length > 0) {
-        // console.log('插入', fts.length, '条')
         await this._doInsert(fts)
         isStock
           ? this.emit(
@@ -484,11 +477,6 @@ const fullText = (NimSdk: any) => {
           )
           : this.emit('ftsUpsert', fts.length, this.msgQueue.length)
       }
-
-      // if (updates.length > 0) {
-      //   console.log('修改', updates.length, '条')
-      //   await this._doUpdate(updates)
-      // }
 
       // 队列里还存在未同步的，那么继续定时执行
       if (this.msgStockQueue.length > 0) {
@@ -503,7 +491,6 @@ const fullText = (NimSdk: any) => {
         this.timeout = 0
       }
 
-      console.timeEnd('一批 3000 个putFts耗时')
     }
 
     async _getMsgsWithInsertAndUpdate(msgs: IMsg[]): Promise<IMsg[]> {
@@ -597,11 +584,12 @@ const fullText = (NimSdk: any) => {
     public async clearAllFts(): Promise<void> {
       try {
         await this.searchDB.run('drop table if exists nim_msglog')
+        await this.searchDB.run('drop table if exists nim_msglog_fts')
+        await this.searchDB.run('drop table if exists nim_msglog_au')
+        await this.searchDB.run('drop table if exists nim_msglog_ai')
+        await this.searchDB.run('drop table if exists nim_msglog_ad')
         await this.createTable()
 
-        // console.time('deleteTable')
-        // await this.searchDB.run('DELETE FROM nim_msglog;')
-        // console.timeEnd('deleteTable')
         this.ftLogFunc('clearAllFts success')
       } catch (error) {
         this.ftLogFunc('clearAllFts fail: ', error)
