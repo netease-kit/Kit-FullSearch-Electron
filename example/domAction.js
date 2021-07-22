@@ -131,6 +131,14 @@ window.onload = (function () {
           .catch(() => {
             alert('清空失败！')
           })
+    } else if (hasClass(target, 'j-drop')) {
+      window.nim && window.nim.dropAllFts()
+        .then(() => {
+          alert('删除所有表并重建成功')
+        })
+        .catch(() => {
+          alert('操作失败！')
+        })
     }
     // 同步消息
     else if (hasClass(target, 'j-sync')) {
@@ -170,16 +178,9 @@ function doSyncByLimit(start = 0) {
     types: ['text', 'custom'], // 只针对文本消息和自定义消息
     limit: 3000,
     done(error, obj) {
-      // console.log(
-      //   '获取并同步本地消息' + (!error ? '成功' : '失败'),
-      //   error,
-      //   '结束时间 ' + new Date(end),
-      //   // '共 ' + obj.msgs && obj.msgs.length + ' 条'
-      // )
-      
       if (obj.msgs && obj.msgs.length > 0) {
         window.total += obj.msgs.length;
-        // console.timeEnd('doSyncByLimit')
+        const time = obj.msgs[obj.msgs.length - 1].time
         doSyncByLimit(time)
       }
     },

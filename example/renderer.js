@@ -9,7 +9,7 @@ function doLog(err, obj) {
 }
 
 NIM.getInstance({
-  debug: true,
+  debug: false,
   appKey: 'fe416640c8e8a72734219e1847ad2547',
   account: 'cs6',
   token: 'e10adc3949ba59abbe56e057f20f883e',

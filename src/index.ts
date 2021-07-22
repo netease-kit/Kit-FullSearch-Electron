@@ -224,7 +224,7 @@ const fullText = (NimSdk: any) => {
               nim_msglog_fts,rowid,idClient,text,sessionId,[from],
               time,target,[to],type,scene,idServer,fromNick,content
             ) VALUES (
-              'delete',old.idClient,old.text,old.sessionId,old.[from],old.time,old.target,
+              'delete',old.id,old.idClient,old.text,old.sessionId,old.[from],old.time,old.target,
               old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
             );
           END;`
@@ -583,16 +583,24 @@ const fullText = (NimSdk: any) => {
 
     public async clearAllFts(): Promise<void> {
       try {
-        await this.searchDB.run('drop table if exists nim_msglog')
-        await this.searchDB.run('drop table if exists nim_msglog_fts')
-        await this.searchDB.run('drop table if exists nim_msglog_au')
-        await this.searchDB.run('drop table if exists nim_msglog_ai')
-        await this.searchDB.run('drop table if exists nim_msglog_ad')
-        await this.createTable()
-
-        this.ftLogFunc('clearAllFts success')
+        await this.searchDB.run('DELETE FROM `nim_msglog`;')
       } catch (error) {
         this.ftLogFunc('clearAllFts fail: ', error)
+        throw error
+      }
+    }
+
+    public async dropAllFts(): Promise<void> {
+      try {
+        await this.searchDB.run('drop table if exists nim_msglog;')
+        await this.searchDB.run('drop table if exists nim_msglog_fts;')
+        await this.searchDB.run('drop trigger if exists nim_msglog_au;')
+        await this.searchDB.run('drop trigger if exists nim_msglog_ai;')
+        await this.searchDB.run('drop trigger if exists nim_msglog_ad;')
+        await this.createTable()
+        this.ftLogFunc('dropAllFts success')
+      } catch (error) {
+        this.ftLogFunc('dropAllFts fail: ', error)
         throw error
       }
     }
