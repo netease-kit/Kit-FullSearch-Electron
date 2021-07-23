@@ -102,6 +102,7 @@ const fullText = (NimSdk: any) => {
       })
       this.searchDB.run = promisify(this.searchDB.run, this.searchDB)
       this.searchDB.all = promisify(this.searchDB.all, this.searchDB)
+      this.searchDB.close = promisify(this.searchDB.close, this.searchDB)
       await this.loadExtension()
       await this.createTable()
       await this.loadDict()
@@ -612,23 +613,18 @@ const fullText = (NimSdk: any) => {
       }
     }
 
-    public destroy(...args: any): void {
+    public async destroy(...args: any): Promise<void> {
+      // 清空队列和定时器，关闭 db。
       this.timeout && clearTimeout(this.timeout)
-      new Promise((resolve, reject) => {
-        this.searchDB.close(function (err) {
-          if (err) {
-            reject(err)
-            return
-          }
-          resolve({})
-        })
-      })
-        .then(() => {
-          this.ftLogFunc('close searchDB success')
-        })
-        .catch((error) => {
-          this.ftLogFunc('close searchDB fail: ', error)
-        })
+      this.msgStockQueue = []
+      this.msgQueue = []
+      try {
+        await this.searchDB.close()
+        this.ftLogFunc('close searchDB success')
+      } catch (err) {
+        this.ftLogFunc('close searchDB fail: ', err)
+        this.emit('ftsError', err)
+      }
       FullTextNim.instance = null
       super.destroy(...args)
     }
