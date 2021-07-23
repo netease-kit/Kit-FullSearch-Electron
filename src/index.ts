@@ -484,6 +484,10 @@ const fullText = (NimSdk: any) => {
 
       if (fts.length > 0) {
         await this._doInsert(fts)
+        // 当 msgQueue 为 null 或者 undefined 时，当作实例已经销毁，此定时触发的任务直接作废
+        if (!this.msgQueue) {
+          return
+        }
         isStock
           ? this.emit(
             'ftsStockUpsert',
@@ -622,7 +626,7 @@ const fullText = (NimSdk: any) => {
       }
     }
 
-    public destroy(...args: any): void {
+    public destroy(options): void {
       // 清空队列和定时器，关闭 db。
       this.timeout && clearTimeout(this.timeout)
       this.msgStockQueue = []
@@ -638,12 +642,14 @@ const fullText = (NimSdk: any) => {
       })
         .then(() => {
           this.ftLogFunc('close searchDB success')
+          FullTextNim.instance = null
+          super.destroy(options)
         })
         .catch((error) => {
           this.ftLogFunc('close searchDB fail: ', error)
+          FullTextNim.instance = null
+          super.destroy(options)
         })
-      FullTextNim.instance = null
-      super.destroy(...args)
     }
 
     // 处理QUERY参数
