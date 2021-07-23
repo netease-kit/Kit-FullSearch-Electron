@@ -102,7 +102,7 @@ const fullText = (NimSdk: any) => {
       })
       this.searchDB.run = promisify(this.searchDB.run, this.searchDB)
       this.searchDB.all = promisify(this.searchDB.all, this.searchDB)
-      this.searchDB.close = promisify(this.searchDB.close, this.searchDB)
+      // this.searchDB.close = promisify(this.searchDB.close, this.searchDB)
       await this.loadExtension()
       await this.createTable()
       await this.loadDict()
@@ -431,16 +431,21 @@ const fullText = (NimSdk: any) => {
           const reg = /[^\u4e00-\u9fa5^a-z^A-Z^0-9]/g
           params.text = params.text.replace(reg, ' ').trim()
         }
-        let records: Array<any> = []
-        // 如果替换后字符串为空并且传入的 sessionIDs 和 fromIDs 都为空
-        // 则不走查询逻辑
-        if (params.text.length === 0 &&
-          (params.sessionIds && params.sessionIds.length === 0) &&
-          (params.froms && params.froms.length === 0)) {
-          return records
+        if (!params.sessionIds) {
+          params.sessionIds = []
         }
+        if (!params.froms) {
+          params.froms = []
+        }
+        
+        // 如果 text 过滤后为空，并且此时不存在 froms，sessionIds，那么直接返回空把。
+        if (!(params.text || params.froms.length > 0 ||
+          params.sessionIds.length > 0 || params.start || params.end)) {
+          return []
+        }
+
         const sql = this._handleQueryParams(params)
-        records = await this.searchDB.all(sql)
+        const records = await this.searchDB.all(sql)
         return records
       } catch (error) {
         this.ftLogFunc('queryFts fail: ', error)
@@ -613,18 +618,26 @@ const fullText = (NimSdk: any) => {
       }
     }
 
-    public async destroy(...args: any): Promise<void> {
+    public destroy(...args: any): void {
       // 清空队列和定时器，关闭 db。
       this.timeout && clearTimeout(this.timeout)
       this.msgStockQueue = []
       this.msgQueue = []
-      try {
-        await this.searchDB.close()
-        this.ftLogFunc('close searchDB success')
-      } catch (err) {
-        this.ftLogFunc('close searchDB fail: ', err)
-        this.emit('ftsError', err)
-      }
+      new Promise((resolve, reject) => {
+        this.searchDB.close(function (err) {
+          if (err) {
+            reject(err)
+            return
+          }
+          resolve({})
+        })
+      })
+        .then(() => {
+          this.ftLogFunc('close searchDB success')
+        })
+        .catch((error) => {
+          this.ftLogFunc('close searchDB fail: ', error)
+        })
       FullTextNim.instance = null
       super.destroy(...args)
     }

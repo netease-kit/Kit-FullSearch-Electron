@@ -48,10 +48,10 @@ window.onload = (function () {
       const queryOption = $('#q-option').value || 0
       let start = $('#q-start').value
       let end = $('#q-end').value
-      if (!text && !sessionIds && !froms) {
-        alert('请输入查询的 关键字 或 sessionId 或 froms')
-        return
-      }
+      // if (!text && !sessionIds && !froms) {
+      //   alert('请输入查询的 关键字 或 sessionId 或 froms')
+      //   return
+      // }
       start = start
         ? start.includes('-')
           ? new Date(start).getTime()
