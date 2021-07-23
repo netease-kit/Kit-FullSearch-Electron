@@ -471,6 +471,10 @@ const fullText = (NimSdk: any) => {
     }
 
     async _putFts(isStock = false): Promise<void> {
+      // 当 msgQueue 为 null 或者 undefined 时，当作实例已经销毁，此定时触发的任务直接作废
+      if (!this.msgQueue) {
+        return
+      }
       const msgs = isStock
         ? this.msgStockQueue.splice(0, 3000)
         : this.msgQueue.splice(0, 3000)
