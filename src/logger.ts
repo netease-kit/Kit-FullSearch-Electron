@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 const packageJson = require('../package.json')
 
 const LevelMap = {

@@ -162,10 +162,11 @@ const fullText = (NimSdk: any) => {
     }
 
     public async rebuildDbIndex(): Promise<void> {
-      await this.searchDB.run(`INSERT INTO nim_msglog_fts(nim_msglog_fts) VALUES('rebuild');`)
+      return await this.searchDB.run(`INSERT INTO nim_msglog_fts(nim_msglog_fts) VALUES('rebuild');`)
     }
 
     public formatSQLText(src: string): string {
+      // sqlite 语法，语句中一个单引号转为两个单引号，还是当作一个转义好的单引号插入
       return src.replace(/\'/gi, `''`)
     }
 
@@ -529,11 +530,11 @@ const fullText = (NimSdk: any) => {
     async _doInsert(msgs: IMsg[]): Promise<void> {
       const that = this
       return new Promise((resolve, reject) => {
-        const column = tableColumn.map(item => '?').join(',')
+        const column = tableColumn.map(() => '?').join(',')
         this.searchDB.serialize(async () => {
           try {
             this.searchDB.exec('BEGIN TRANSACTION;')
-            msgs.map((msg, index) => {
+            msgs.forEach((msg) => {
               this.searchDB.run(`INSERT OR IGNORE INTO \`nim_msglog\` VALUES(NULL,${column});`, [
                 msg._id,
                 msg.text,
@@ -609,6 +610,7 @@ const fullText = (NimSdk: any) => {
     }
 
     public destroy(...args: any): void {
+      this.timeout && clearTimeout(this.timeout)
       new Promise((resolve, reject) => {
         this.searchDB.close(function (err) {
           if (err) {
