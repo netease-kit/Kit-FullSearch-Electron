@@ -209,7 +209,7 @@ const fullText = (NimSdk: any) => {
           );`
         )
         await this.searchDB.run(`
-          CREATE TRIGGER nim_msglog_ai AFTER INSERT ON nim_msglog 
+          CREATE TRIGGER IF NOT EXISTS nim_msglog_ai AFTER INSERT ON nim_msglog 
           BEGIN 
             INSERT INTO nim_msglog_fts (
               rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
@@ -220,7 +220,7 @@ const fullText = (NimSdk: any) => {
           END;`
         )
         await this.searchDB.run(`
-          CREATE TRIGGER nim_msglog_ad AFTER DELETE ON nim_msglog
+          CREATE TRIGGER IF NOT EXISTS nim_msglog_ad AFTER DELETE ON nim_msglog
           BEGIN
             INSERT INTO nim_msglog_fts (
               nim_msglog_fts,rowid,idClient,text,sessionId,[from],
@@ -232,7 +232,7 @@ const fullText = (NimSdk: any) => {
           END;`
         )
         await this.searchDB.run(`
-          CREATE TRIGGER nim_msglog_au AFTER UPDATE ON nim_msglog
+          CREATE TRIGGER IF NOT EXISTS nim_msglog_au AFTER UPDATE ON nim_msglog
           BEGIN
             INSERT INTO nim_msglog_fts (
               nim_msglog_fts,rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
@@ -437,7 +437,7 @@ const fullText = (NimSdk: any) => {
         if (!params.froms) {
           params.froms = []
         }
-        
+
         // 如果 text 过滤后为空，并且此时不存在 froms，sessionIds，那么直接返回空把。
         if (!(params.text || params.froms.length > 0 ||
           params.sessionIds.length > 0 || params.start || params.end)) {
