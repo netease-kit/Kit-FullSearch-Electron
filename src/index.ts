@@ -431,8 +431,11 @@ const fullText = (NimSdk: any) => {
           params.text = params.text.replace(reg, ' ').trim()
         }
         let records: Array<any> = []
-        // 如果替换后字符串为空则不走查询逻辑
-        if (params.text.length === 0) {
+        // 如果替换后字符串为空并且传入的 sessionIDs 和 fromIDs 都为空
+        // 则不走查询逻辑
+        if (params.text.length === 0 &&
+          (params.sessionIds && params.sessionIds.length === 0) &&
+          (params.froms && params.froms.length === 0)) {
           return records
         }
         const sql = this._handleQueryParams(params)
