@@ -641,12 +641,12 @@ const fullText = (NimSdk: any) => {
         })
       })
         .then(() => {
-          this.ftLogFunc('close searchDB success')
+          this.ftLogFunc && this.ftLogFunc('close searchDB success')
           FullTextNim.instance = null
           super.destroy(options)
         })
         .catch((error) => {
-          this.ftLogFunc('close searchDB fail: ', error)
+          this.ftLogFunc && this.ftLogFunc('close searchDB fail: ', error)
           FullTextNim.instance = null
           super.destroy(options)
         })

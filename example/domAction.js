@@ -188,7 +188,6 @@ function doSyncByLimit(start = 0) {
 }
 
 function doSyncAll(end = new Date().getTime()) {
-  console.time('doSyncByLimit')
   window.nim.getLocalMsgsToFts({
     start: 0, // 起点
     end: 1640995200000, // 终点
