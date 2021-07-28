@@ -177,8 +177,10 @@ function doSyncByLimit(start = 0) {
     desc: false, // 从start开始查
     types: ['text', 'custom'], // 只针对文本消息和自定义消息
     limit: 3000,
+    // limit: 10,
     done(error, obj) {
       if (obj.msgs && obj.msgs.length > 0) {
+        console.log('从 indexdb 里取出了一批 ', obj.msgs.length)
         window.total += obj.msgs.length;
         const time = obj.msgs[obj.msgs.length - 1].time
         doSyncByLimit(time)
@@ -186,6 +188,26 @@ function doSyncByLimit(start = 0) {
     },
   })
 }
+
+// function doSyncByLimit(start = 0) {
+//   if (start === 0) {
+//     window.nim.on('ftsStockUpsert', function (excuteRow, otherRow, restRow, lastTime) {
+//       // console.log('同步进度：', 100 - restRow / window.total * 100)
+//       console.log(`upsert 存量数据任务进行中，已执行 ${excuteRow} 条, 另外一个消息队列目前拥有 ${otherRow} 条, 存量数据队列还剩下 ${restRow} 条, 上一条同步的时间是 ${lastTime} `)
+//       lastTime > 0 ? doSyncByLimit(lastTime) : null
+//     })
+//   }
+//   window.nim.getLocalMsgsToFts({
+//     start: start, // 起点
+//     end: new Date().getTime(), // 终点
+//     desc: false, // 从start开始查
+//     types: ['text', 'custom'], // 只针对文本消息和自定义消息
+//     limit: 3000,
+//     // limit: 10,
+//     done(error, obj) {
+//     },
+//   })
+// }
 
 function doSyncAll(end = new Date().getTime()) {
   window.nim.getLocalMsgsToFts({

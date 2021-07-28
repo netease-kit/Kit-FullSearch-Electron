@@ -182,11 +182,11 @@ const fullText = (NimSdk: any) => {
             "sessionId" TEXT NOT NULL,
             "from"      TEXT NOT NULL,
             "time"      INTEGER NOT NULL,
-            "target"    NUMERIC NOT NULL,
+            "target"    TEXT NOT NULL,
             "to"        TEXT NOT NULL,
             "type"      TEXT,
             "scene"     TEXT,
-            "idServer"  INTEGER NOT NULL,
+            "idServer"  TEXT NOT NULL,
             "fromNick"  TEXT,
             "content"   TEXT
           );`
@@ -566,6 +566,7 @@ const fullText = (NimSdk: any) => {
                 msg.fromNick,
                 msg.content
               ])
+              // .catch((err) => { that.emit('ftsError', err) })
             })
             this.searchDB.exec('COMMIT;', function (err) {
               if (err) {
