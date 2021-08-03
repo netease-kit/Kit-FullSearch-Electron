@@ -1,80 +1,89 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
-    <title>Hello World!</title>
-  </head>
-  <body>
-    <h1>Hello World!</h1>
-    We are using Node.js <span id="node-version"></span>, Chromium
-    <span id="chrome-version"></span>, and Electron
-    <span id="electron-version"></span>
-    <!-- . 分词结果
+
+<head>
+  <meta charset="UTF-8" />
+  <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+  <title>Hello World!</title>
+</head>
+
+<body>
+  <h1>Hello World!</h1>
+  We are using Node.js <span id="node-version"></span>, Chromium
+  <span id="chrome-version"></span>, and Electron
+  <span id="electron-version"></span>
+  <!-- . 分词结果
     <span id="segment-result"></span> -->
+  <div>
+    <h3>批量写入indexDB与searchDB</h3>
+    <input id="w-keyword" type="text" placeholder="关键字，不填则随机生成" />
+    <input id="w-number" type="number" placeholder="条数" />
+    <button class="j-write">写入</button>
+  </div>
+  <div>
+    <h3>根据idClient从indexDB中搜索</h3>
+    <input id="q-idClient" type="text" placeholder="idClient" />
+    <button class="j-query-indexdb">查询</button>
+  </div>
+  <div>
+    <h3>根据关键字全文搜索 queryFts</h3>
     <div>
-      <h3>批量写入indexDB与searchDB</h3>
-      <input id="w-keyword" type="text" placeholder="关键字，不填则随机生成" />
-      <input id="w-number" type="number" placeholder="条数" />
-      <button class="j-write">写入</button>
+      <span>关键字</span>
+      <input id="q-keyword" type="text" placeholder="关键字" />
+      <span>分词逻辑</span>
+      <input id="q-option" type="number" placeholder="分词逻辑" />
     </div>
     <div>
-      <h3>根据idClient从indexDB中搜索</h3>
-      <input id="q-idClient" type="text" placeholder="idClient" />
-      <button class="j-query-indexdb">查询</button>
+      <span>sessionIds</span>
+      <input id="q-sessionIds" type="text" placeholder="选填，多个用,分割" />
     </div>
     <div>
-      <h3>根据关键字全文搜索 queryFts</h3>
-      <div>
-        <span>关键字</span>
-        <input id="q-keyword" type="text" placeholder="关键字" />
-      </div>
-      <div>
-        <span>sessionIds</span>
-        <input id="q-sessionIds" type="text" placeholder="选填，多个用,分割" />
-      </div>
-      <div>
-        <span>froms</span>
-        <input id="q-froms" type="text" placeholder="选填，多个用,分割" />
-      </div>
-      <div>
-        <span>分页叶码limit</span>
-        <input id="q-limit" type="number" placeholder="默认100" />
-      </div>
-      <div>
-        <span>分页偏移量offset</span>
-        <input id="q-offset" type="number" placeholder="默认0" />
-      </div>
-      <div>
-        <span>时间排序</span>
-        <select id="q-sort">
-          <option value="">不使用时间排序</option>
-          <option value="ascend">升序</option>
-          <option value="descend">降序</option>
-        </select>
-      </div>
-      <div>
-        时间范围
-        <span>开始时间</span>
-        <input id="q-start" type="text" placeholder="2021-4-27 10:12:11" />
-        <span>结束时间</span>
-        <input id="q-end" type="text" placeholder="2021-4-27 12:12:11" />
-      </div>
-      <div>
-        <button class="j-query-fulltext">查询</button>
-      </div>
+      <span>froms</span>
+      <input id="q-froms" type="text" placeholder="选填，多个用,分割" />
     </div>
     <div>
-      <h3>发送消息 sendText</h3>
-      <input id="s-keyword" type="text" placeholder="消息内容" />
-      <button class="j-send">发送</button>
+      <span>分页叶码limit</span>
+      <input id="q-limit" type="number" placeholder="默认100" />
     </div>
     <div>
-      <h3>同步indexDB到search-index</h3>
-      <button class="j-write-indexdb">只往 indexDB 写入 50000 条（20年到22年间）</button>
-      <button class="j-sync">同步最近两年</button>
+      <span>分页偏移量offset</span>
+      <input id="q-offset" type="number" placeholder="默认0" />
     </div>
-    <!-- <div>
+    <div>
+      <br>时间范围
+      <span>开始时间</span>
+      <input id="q-start" type="text" placeholder="2021-4-27 10:12:11" />
+      <span>结束时间</span>
+      <input id="q-end" type="text" placeholder="2021-4-27 12:12:11" />
+    </div>
+    <div>
+      <span>时间排序</span>
+      <select id="q-sort">
+        <option value="">不使用时间排序</option>
+        <option value="ascend">升序</option>
+        <option value="descend">降序</option>
+      </select>
+    </div>
+    <div>
+      <button class="j-query-fulltext">查询</button>
+    </div>
+    <div>
+      <div>
+        <h3>同步indexDB到search-index</h3>
+        <button class="j-write-indexdb">只往 indexDB 写入 50000 条（20年到21年7月间）</button>
+        <button class="j-write-indexdb-ascii">只往 indexDB 写入 1 条 ascii 字符（ 127 个字符）</button>
+        <button class="j-sync">同步最近两年</button>
+        <button class="j-syncall">同步所有</button>
+        
+      </div>
+    </div>
+  </div>
+  <div>
+    <h3>发送消息 sendText</h3>
+    <input id="s-keyword" type="text" placeholder="消息内容" />
+    <button class="j-send">发送</button>
+  </div>
+  <!-- <div>
       <h3>发送自定义消息 sendCustomMsg</h3>
       <input id="diy-keyword" type="text" placeholder="消息内容" />
       <button class="j-send-diy">发送</button>
@@ -109,13 +118,15 @@
       <input id="diy-keyword" type="text" placeholder="消息内容" />
       <button class="j-send-diy">删除</button>
     </div> -->
-    <div>
-      <h3>清空searchDB clearAllFts</h3>
-      <button class="j-clear">清空</button>
-    </div>
+  <div>
+    <h3>清空 FTS 表及重建 FTS 表</h3>
+    <button class="j-clear">清空</button>
+    <button class="j-drop">重建</button>
+  </div>
 
-    <!-- You can also require other files to run in this process -->
-    <script src="./renderer.js"></script>
-    <script src="./domAction.js"></script>
-  </body>
+  <!-- You can also require other files to run in this process -->
+  <script src="./renderer.js"></script>
+  <script src="./domAction.js"></script>
+</body>
+
 </html>

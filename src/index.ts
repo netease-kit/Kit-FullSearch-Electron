@@ -1,46 +1,14 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable @typescript-eslint/no-this-alias */
 import { logger } from './logger'
-// import { queuePromise } from './utils'
+import { promisify, promisifyForDone } from './utils'
+import { IFullTextNim, IInitOpt, QueryOption, IQueryParams, IMsg } from './type'
 import * as path from 'path'
 import * as os from 'os'
 const sqlite3 = require('sqlite3').verbose()
 
-// const si = require('search-index')
-
-const promisify = function (func, instance) {
-  // return function (...args) {
-  //   return new Promise((resolve, reject) => {
-  //     console.log('load', ...args);
-  //     func(...args, (err, arg) => {
-  //       if (err) reject(err)
-  //       else resolve(arg)
-  //     })
-  //   });
-  // }
-  return (...arg: any) =>
-    new Promise((resolve, reject) => {
-      func.call(instance, ...arg, (err, result) => {
-        if (err) reject(err)
-        else resolve(result)
-      })
-    })
-}
-
-const promisifyForDone = function (func, instance) {
-  return (obj: any) =>
-    new Promise((resolve, reject) => {
-      func.call(instance, {
-        ...obj,
-        done(err, result) {
-          if (err) reject(err)
-          else resolve(result)
-        },
-      })
-    })
-}
-
 const tableColumn = [
-  '_id',
+  'id',
   'text',
   'sessionId',
   'from',
@@ -54,66 +22,6 @@ const tableColumn = [
   'content',
 ]
 
-export interface IFullTextNim {
-  initDB(): Promise<void>
-  loadExtension(): Promise<void>
-  sendText(opt: any): any
-  sendCustomMsg(opt: any): any
-  saveMsgsToLocal(opt: any): any
-  getLocalMsgsToFts(opt: any): any
-  deleteMsg(opt: any): any
-  deleteLocalMsg(opt: any): any
-  deleteAllLocalMsgs(opt: any): any
-  deleteMsgSelf(opt: any): any
-  deleteMsgSelfBatch(opt: any): any
-  queryFts(params: IQueryParams): Promise<any>
-  putFts(msgs: IMsg | IMsg[]): Promise<void>
-  deleteFts(ids: string | string[]): Promise<void>
-  clearAllFts(): Promise<void>
-  destroy(...args: any): void
-}
-
-export interface IInitOpt {
-  account: string
-  appKey: string
-  debug?: boolean
-  // ignoreChars?: string
-  searchDBName?: string
-  searchDBPath?: string
-  ftLogFunc?: (...args: any) => void
-  fullSearchCutFunc?: (text: string) => string[]
-  [key: string]: any
-}
-
-export type IDirection = 'ascend' | 'descend'
-
-export type ILogic = 'and' | 'or'
-
-export interface IQueryParams {
-  text: string
-  limit?: number
-  offset?: number
-  sessionIds?: string[]
-  froms?: string[]
-  timeDirection?: IDirection
-  start?: number
-  end?: number
-  textLogic?: ILogic
-  sessionIdLogic?: ILogic
-  fromsLogic?: ILogic
-}
-
-export interface IMsg {
-  [key: string]: any
-}
-
-export interface ISiItem {
-  _id: string
-  time: number
-  sessionId: string
-  idx: string
-}
-
 /**
  * 全文搜索扩展函数
  * @param NimSdk im sdk的类
@@ -121,15 +29,17 @@ export interface ISiItem {
 const fullText = (NimSdk: any) => {
   return class FullTextNim extends NimSdk implements IFullTextNim {
     public static instance: FullTextNim | null
+    queryOption: QueryOption
+    enablePinyin: boolean
     searchDB: any
     ftLogFunc: (...args: any) => void
     // ignoreChars: string
     searchDBName: string
     searchDBPath: string
     fullSearchCutFunc?: (text: string) => string[]
-    // 内部使用，对putFts做了并发保护
-    // _putFts = queuePromise(this.putFts)
-    _putFts = this.putFts
+    msgStockQueue: any[]
+    msgQueue: any[]
+    timeout: number
 
     constructor(initOpt: IInitOpt) {
       super(initOpt)
@@ -137,7 +47,8 @@ const fullText = (NimSdk: any) => {
       const {
         account,
         appKey,
-        // ignoreChars,
+        queryOption,
+        enablePinyin,
         searchDBName,
         searchDBPath,
         debug,
@@ -161,11 +72,13 @@ const fullText = (NimSdk: any) => {
         this.ftLogFunc('invalid init params!')
         throw new Error('invalid init params!')
       }
-      // this.ignoreChars =
-      //   ignoreChars ||
-      //   ' \t\r\n~!@#$%^&*()_+-=【】、{}|;\':"，。、《》？αβγδεζηθικλμνξοπρστυφχψωΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ。，、；：？！…—·ˉ¨‘’“”々～‖∶＂＇｀｜〃〔〕〈〉《》「」『』．〖〗【】（）［］｛｝ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩⅪⅫ⒈⒉⒊⒋⒌⒍⒎⒏⒐⒑⒒⒓⒔⒕⒖⒗⒘⒙⒚⒛㈠㈡㈢㈣㈤㈥㈦㈧㈨㈩①②③④⑤⑥⑦⑧⑨⑩⑴⑵⑶⑷⑸⑹⑺⑻⑼⑽⑾⑿⒀⒁⒂⒃⒄⒅⒆⒇≈≡≠＝≤≥＜＞≮≯∷±＋－×÷／∫∮∝∞∧∨∑∏∪∩∈∵∴⊥∥∠⌒⊙≌∽√§№☆★○●◎◇◆□℃‰€■△▲※→←↑↓〓¤°＃＆＠＼︿＿￣―♂♀┌┍┎┐┑┒┓─┄┈├┝┞┟┠┡┢┣│┆┊┬┭┮┯┰┱┲┳┼┽┾┿╀╁╂╃└┕┖┗┘┙┚┛━┅┉┤┥┦┧┨┩┪┫┃┇┋┴┵┶┷┸┹┺┻╋╊╉╈╇╆╅╄'
+      this.queryOption = queryOption || QueryOption.kDefault
+      this.enablePinyin = enablePinyin || false
       this.searchDBName = searchDBName || `${account}-${appKey}`
       this.searchDBPath = searchDBPath || ''
+      this.msgQueue = []
+      this.msgStockQueue = []
+      this.timeout = 0
       if (fullSearchCutFunc) {
         this.fullSearchCutFunc = fullSearchCutFunc
       }
@@ -187,15 +100,15 @@ const fullText = (NimSdk: any) => {
           resolve(db)
         })
       })
-      // console.log(this.searchDB.run)
-      // console.log(this.searchDB.all)
       this.searchDB.run = promisify(this.searchDB.run, this.searchDB)
-      // this.searchDB.close = promisify(this.searchDB.close, this.searchDB)
       this.searchDB.all = promisify(this.searchDB.all, this.searchDB)
+      // this.searchDB.close = promisify(this.searchDB.close, this.searchDB)
       await this.loadExtension()
       await this.createTable()
       await this.loadDict()
-      // console.log(this.searchDB.close())
+
+      // 检查 db，异步检查即可
+      this.checkDbSafe()
     }
 
     public async loadExtension(filePath?: string): Promise<void> {
@@ -208,7 +121,11 @@ const fullText = (NimSdk: any) => {
         } else {
           libName = 'simple.dll'
         }
-        filePath = path.resolve(path.join(__dirname, libName).replace(/^(.+)asar(.node_modules.+)$/, '$1asar.unpacked$2'))
+        filePath = path.resolve(
+          path
+            .join(__dirname, libName)
+            .replace(/^(.+)asar(.node_modules.+)$/, '$1asar.unpacked$2')
+        )
       }
       await new Promise((resolve, reject) => {
         this.searchDB.loadExtension(filePath, function (err) {
@@ -223,26 +140,117 @@ const fullText = (NimSdk: any) => {
 
     public async loadDict(): Promise<void> {
       try {
-        const resourcePath = path.resolve(path.join(__dirname).replace(/^(.+)asar(.node_modules.+)$/, '$1asar.unpacked$2'))
-        const dictPath = path.join(resourcePath, 'dict').concat(process.platform === 'win32' ? '\\' : '/')
-        console.log(dictPath)
-        await this.searchDB.run(
-          `SELECT jieba_dict("${dictPath}")`
+        const resourcePath = path.resolve(
+          path
+            .join(__dirname)
+            .replace(/^(.+)asar(.node_modules.+)$/, '$1asar.unpacked$2')
         )
+        const dictPath = path
+          .join(resourcePath, 'dict')
+          .concat(process.platform === 'win32' ? '\\' : '/')
+        await this.searchDB.run(`SELECT jieba_dict("${dictPath}")`)
       } catch (err) {
         this.ftLogFunc('failed to load jieba dict: ', err)
       }
     }
 
+    public async checkDbSafe(): Promise<void> {
+      try {
+        await this.searchDB.run(`INSERT INTO nim_msglog_fts(nim_msglog_fts) VALUES('integrity-check');`)
+      } catch (err) {
+        this.emit('ftsDamaged', err)
+      }
+    }
+
+    public async rebuildDbIndex(): Promise<void> {
+      return await this.searchDB.run(`INSERT INTO nim_msglog_fts(nim_msglog_fts) VALUES('rebuild');`)
+    }
+
+    public formatSQLText(src: string): string {
+      // sqlite 语法，语句中一个单引号转为两个单引号，还是当作一个转义好的单引号插入
+      return src.replace(/\'/gi, `''`)
+    }
+
     public async createTable(): Promise<void> {
       try {
         // simple 0 是为了禁止拼音
-        const column = tableColumn.map((item) => '`' + item + '`').join(', ')
-        await this.searchDB.run(
-          `CREATE VIRTUAL TABLE IF NOT EXISTS t1 USING fts5(${column}, tokenize = 'simple 0')`
+        await this.searchDB.run(`
+          CREATE TABLE IF NOT EXISTS "nim_msglog" (
+            "id"        INTEGER PRIMARY KEY AUTOINCREMENT,
+            "idClient"  TEXT NOT NULL UNIQUE,
+            "text"      TEXT,
+            "sessionId" TEXT NOT NULL,
+            "from"      TEXT NOT NULL,
+            "time"      INTEGER NOT NULL,
+            "target"    TEXT NOT NULL,
+            "to"        TEXT NOT NULL,
+            "type"      TEXT,
+            "scene"     TEXT,
+            "idServer"  TEXT NOT NULL,
+            "fromNick"  TEXT,
+            "content"   TEXT
+          );`
+        )
+        await this.searchDB.run(`
+          CREATE VIRTUAL TABLE IF NOT EXISTS nim_msglog_fts USING fts5(
+            [idClient] UNINDEXED,
+            [text],
+            [sessionId] UNINDEXED,
+            [from] UNINDEXED,
+            [time] UNINDEXED,
+            [target] UNINDEXED,
+            [to] UNINDEXED,
+            [type] UNINDEXED,
+            [scene] UNINDEXED,
+            [idServer] UNINDEXED,
+            [fromNick] UNINDEXED,
+            [content] UNINDEXED,
+            content = [nim_msglog], content_rowid = id, tokenize = 'simple 0'
+          );`
+        )
+        await this.searchDB.run(`
+          CREATE TRIGGER IF NOT EXISTS nim_msglog_ai AFTER INSERT ON nim_msglog 
+          BEGIN 
+            INSERT INTO nim_msglog_fts (
+              rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+            ) VALUES (
+              new.id,new.idClient,new.text,new.sessionId,new.[from],new.time,new.target,
+              new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
+            );
+          END;`
+        )
+        await this.searchDB.run(`
+          CREATE TRIGGER IF NOT EXISTS nim_msglog_ad AFTER DELETE ON nim_msglog
+          BEGIN
+            INSERT INTO nim_msglog_fts (
+              nim_msglog_fts,rowid,idClient,text,sessionId,[from],
+              time,target,[to],type,scene,idServer,fromNick,content
+            ) VALUES (
+              'delete',old.id,old.idClient,old.text,old.sessionId,old.[from],old.time,old.target,
+              old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
+            );
+          END;`
+        )
+        await this.searchDB.run(`
+          CREATE TRIGGER IF NOT EXISTS nim_msglog_au AFTER UPDATE ON nim_msglog
+          BEGIN
+            INSERT INTO nim_msglog_fts (
+              nim_msglog_fts,rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+            ) VALUES (
+              'delete',old.id,old.idClient,old.text,old.sessionId,old.[from],old.time,
+              old.target,old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
+            );
+            INSERT INTO nim_msglog_fts (
+              rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+            ) VALUES (
+              new.id,new.idClient,new.text,new.sessionId,new.[from],
+              new.time,new.target,new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
+            );
+          END;`
         )
       } catch (err) {
         this.ftLogFunc('create VIRTUAL table failed: ', err)
+        this.emit('ftsError', err)
       }
     }
 
@@ -263,7 +271,7 @@ const fullText = (NimSdk: any) => {
         ...opt,
         done: (err: any, obj: any) => {
           if (!err && obj.idClient) {
-            this._putFts(obj)
+            this.putFts(obj)
           }
           opt.done && opt.done(err, obj)
         },
@@ -275,7 +283,7 @@ const fullText = (NimSdk: any) => {
         ...opt,
         done: (err: any, obj: any) => {
           if (!err) {
-            this._putFts(obj)
+            this.putFts(obj)
           }
           opt.done && opt.done(err, obj)
         },
@@ -318,7 +326,7 @@ const fullText = (NimSdk: any) => {
           ...opt,
         })
         if (obj.msgs && obj.msgs.length > 0) {
-          const idClients = obj.msgs.map(msg => msg.idClient)
+          const idClients = obj.msgs.map((msg) => msg.idClient)
           await this.deleteFts(idClients)
         }
         opt.done && opt.done(null, result)
@@ -342,7 +350,7 @@ const fullText = (NimSdk: any) => {
           ...opt,
         })
         if (obj.msgs && obj.msgs.length > 0) {
-          const idClients = obj.msgs.map(msg => msg.idClient)
+          const idClients = obj.msgs.map((msg) => msg.idClient)
           await this.deleteFts(idClients)
         }
         opt.done && opt.done(null, result)
@@ -410,49 +418,34 @@ const fullText = (NimSdk: any) => {
       const msgs: IMsg[] = obj.msgs
 
       if (msgs && msgs.length > 0) {
-        await this.putFts(msgs || [])
+        this.putFts(msgs || [], true)
       }
 
       opt.done && opt.done(null, obj)
-
-      // return super.getLocalMsgs({
-      //   ...opt,
-      //   done: (err: any, obj: any) => {
-      //     if (!err) {
-      //       this._putFts(obj.msgs)
-      //     }
-      //     opt.done && opt.done(err, obj)
-      //   },
-      // })
     }
 
     public async queryFts(params: IQueryParams): Promise<any> {
       try {
-        // 入参过滤，去除多余的符号
-        // text 就简单替换 ' 这种字符，换掉把
+        // 入参过滤，去除多余的符号，text 替换 ' 字符
         if (params.text) {
           const reg = /[^\u4e00-\u9fa5^a-z^A-Z^0-9]/g
           params.text = params.text.replace(reg, ' ').trim()
         }
-        if (params.text === '') {
+        if (!params.sessionIds) {
+          params.sessionIds = []
+        }
+        if (!params.froms) {
+          params.froms = []
+        }
+
+        // 如果 text 过滤后为空，并且此时不存在 froms，sessionIds，那么直接返回空把。
+        if (!(params.text || params.froms.length > 0 ||
+          params.sessionIds.length > 0 || params.start || params.end)) {
           return []
         }
 
         const sql = this._handleQueryParams(params)
         const records = await this.searchDB.all(sql)
-        // const records = await this.searchDB.QUERY(queryParams, queryOptions)
-        // this.ftLogFunc('queryFts searchDB QUERY success', records)
-        // const idClients = (records && records.map((item) => item._id)) || []
-        // if (!idClients || !idClients.length) {
-        //   this.ftLogFunc('queryFts 查询本地消息，无匹配词')
-        //   throw '查询本地消息，无匹配词'
-        // }
-        // const res = await this._getLocalMsgsByIdClients(idClients)
-        // this.ftLogFunc('queryFts success')
-
-        // if (!(records && records.length > 0)) {
-        //   throw 'No record suitable'
-        // }
         return records
       } catch (error) {
         this.ftLogFunc('queryFts fail: ', error)
@@ -460,10 +453,68 @@ const fullText = (NimSdk: any) => {
       }
     }
 
-    public async putFts(msgs: IMsg | IMsg[]): Promise<void> {
+    public putFts(msgs: IMsg | IMsg[], isStock = false): void {
       if (!Array.isArray(msgs)) {
         msgs = [msgs]
       }
+      if (isStock) {
+        this.msgStockQueue = this.msgStockQueue.concat(msgs)
+      } else {
+        this.msgQueue = this.msgQueue.concat(msgs)
+      }
+      // 设置定时器，开始同步
+      if (!this.timeout) {
+        this.timeout = (setTimeout(() => {
+          this._putFts(isStock)
+        }, 0) as unknown) as number
+      }
+    }
+
+    async _putFts(isStock = false): Promise<void> {
+      // 当 msgQueue 为 null 或者 undefined 时，当作实例已经销毁，此定时触发的任务直接作废
+      if (!this.msgQueue) {
+        return
+      }
+      const msgs = isStock
+        ? this.msgStockQueue.splice(0, 3000)
+        : this.msgQueue.splice(0, 3000)
+
+      // const { inserts, updates } = await this._getMsgsWithInsertAndUpdate(msgs)
+      const fts = await this._getMsgsWithInsertAndUpdate(msgs)
+
+      if (fts.length > 0) {
+        await this._doInsert(fts)
+        // 当 msgQueue 为 null 或者 undefined 时，当作实例已经销毁，此定时触发的任务直接作废
+        if (!this.msgQueue) {
+          return
+        }
+        isStock
+          ? this.emit(
+            'ftsStockUpsert',
+            fts.length,
+            this.msgQueue.length,
+            this.msgStockQueue.length,
+            fts[fts.length - 1].time
+          )
+          : this.emit('ftsUpsert', fts.length, this.msgQueue.length)
+      }
+
+      // 队列里还存在未同步的，那么继续定时执行
+      if (this.msgStockQueue.length > 0) {
+        this.timeout = (setTimeout(() => {
+          this._putFts(true)
+        }, 100) as unknown) as number
+      } else if (this.msgQueue.length > 0) {
+        this.timeout = (setTimeout(() => {
+          this._putFts()
+        }, 100) as unknown) as number
+      } else {
+        this.timeout = 0
+      }
+
+    }
+
+    async _getMsgsWithInsertAndUpdate(msgs: IMsg[]): Promise<IMsg[]> {
       // 去重
       const map = msgs.reduce((total, next) => {
         if (next.idClient) {
@@ -471,7 +522,7 @@ const fullText = (NimSdk: any) => {
         }
         return total
       }, {})
-      msgs = Object.keys(map).map(key => map[key])
+      msgs = Object.keys(map).map((key) => map[key])
       const fts = msgs
         .filter((msg) => msg.text && msg.idClient)
         .map((msg) => {
@@ -490,131 +541,49 @@ const fullText = (NimSdk: any) => {
             content: msg.content,
           }
         })
-      const ids = fts.map((item) => `"${item._id}"`).join(',')
-      const existRows = await this.searchDB.all(
-        `select rowid, _id from t1 where _id in (${ids})`
-      )
-      const existRowIds =
-        existRows && existRows.length > 0 ? existRows.map((row) => row._id) : []
-      const updates: any[] = []
-      const inserts: any[] = []
-      fts.forEach((item) => {
-        const idx = existRowIds.indexOf(item._id)
-        if (idx === -1) {
-          inserts.push(item)
-        } else {
-          updates.push({
-            ...item,
-            rowid: existRows[idx].rowid,
-          })
-        }
+      return fts
+    }
+
+    async _doInsert(msgs: IMsg[]): Promise<void> {
+      const that = this
+      return new Promise((resolve, reject) => {
+        const column = tableColumn.map(() => '?').join(',')
+        this.searchDB.serialize(async () => {
+          try {
+            this.searchDB.exec('BEGIN TRANSACTION;')
+            msgs.forEach((msg) => {
+              this.searchDB.run(`INSERT OR IGNORE INTO \`nim_msglog\` VALUES(NULL,${column});`, [
+                msg._id,
+                msg.text,
+                msg.sessionId,
+                msg.from,
+                msg.time,
+                msg.target,
+                msg.to,
+                msg.type,
+                msg.scene,
+                msg.idServer,
+                msg.fromNick,
+                msg.content
+              ])
+              // .catch((err) => { that.emit('ftsError', err) })
+            })
+            this.searchDB.exec('COMMIT;', function (err) {
+              if (err) {
+                that.emit('ftsError', err)
+                reject(err)
+                return
+              }
+              resolve()
+            })
+          } catch (err) {
+            this.searchDB.exec('ROLLBACK TRANSACTION;', function (err) {
+              that.ftLogFunc('rollback: ', err)
+            })
+            reject(err)
+          }
+        })
       })
-
-      if (inserts.length > 0) {
-        console.log('插入', inserts.length, '条')
-        await new Promise((resolve, reject) => {
-          this.searchDB.serialize(async () => {
-            try {
-              const stmt = this.searchDB.prepare(
-                `INSERT OR IGNORE INTO t1 VALUES (${tableColumn.map(item => '?').join(',')})`
-              )
-              this.searchDB.exec('BEGIN TRANSACTION')
-              inserts.forEach((msg: IMsg) => {
-                stmt.run(
-                  msg._id, msg.text, msg.sessionId, msg.from, msg.time,
-                  msg.target, msg.to, msg.type, msg.scene, msg.idServer,
-                  msg.fromNick, msg.content
-                )
-              })
-              this.searchDB.exec('COMMIT')
-              stmt.finalize(function (err) {
-                if (err) {
-                  reject(err)
-                } else {
-                  resolve({})
-                }
-              })
-            } catch (err) {
-              this.searchDB.exec('ROLLBACK TRANSACTION')
-              reject(err)
-            }
-          })
-        })
-      }
-
-      if (updates.length > 0) {
-        console.log('修改', updates.length, '条')
-        await new Promise((resolve, reject) => {
-          this.searchDB.serialize(async () => {
-            try {
-              const stmt = this.searchDB.prepare(
-                'UPDATE `t1` SET `_id`=?,`text`=?,`sessionId`=?,`from`=?,`time`=? where `rowid`=?'
-              )
-              this.searchDB.exec('BEGIN TRANSACTION')
-              updates.forEach((msg: IMsg) => {
-                stmt.run(
-                  msg._id,
-                  msg.text,
-                  msg.sessionId,
-                  msg.from,
-                  msg.time,
-                  msg.rowid
-                )
-              })
-              this.searchDB.exec('COMMIT')
-              stmt.finalize(function (err) {
-                if (err) {
-                  reject(err)
-                } else {
-                  resolve({})
-                }
-              })
-            } catch (err) {
-              this.searchDB.exec('ROLLBACK TRANSACTION')
-              reject(err)
-            }
-          })
-        })
-      }
-
-      // const promises = fts.map(item => {
-      //   return this.searchDB.run(`
-      //     INSERT OR REPLACE
-      //     INTO t1 (\`rowid\`, \`_id\`, \`text\`, \`sessionId\`, \`from\`, \`time\`) VALUES
-      //     ((SELECT \`rowid\` FROM t1 WHERE \`_id\` = "${item._id}" LIMIT 1), "${item._id}", "${item.text}", "${item.sessionId}", "${item.from}", "${item.time}")
-      //   `)
-      // })
-
-      // try {
-      //   await Promise.all(promises)
-      //   this.ftLogFunc('putFts success', fts)
-      // } catch (err) {
-      //   this.ftLogFunc('putFts fail: ', err)
-      //   throw err
-      // }
-
-      // return new Promise((resolve, reject) => {
-      //   const stmt = this.searchDB.prepare(
-      //     'INSERT OR IGNORE INTO t1 VALUES (?, ?, ?, ?, ?)'
-      //   )
-      //   msgs.forEach((msg: IMsg) => {
-      //     stmt.run(msg.idClient, msg.text, msg.sessionId, msg.from, msg.time)
-      //   })
-      //   stmt.finalize(function (err) {
-      //     if (err) {
-      //       reject(err)
-      //     } else {
-      //       resolve({})
-      //     }
-      //   })
-      // })
-      //   .then(() => {
-      //     this.ftLogFunc('putFts success', fts)
-      //   })
-      //   .catch((error) => {
-      //     this.ftLogFunc('putFts fail: ', error)
-      //     throw error
-      //   })
     }
 
     public async deleteFts(ids: string | string[]): Promise<void> {
@@ -624,15 +593,9 @@ const fullText = (NimSdk: any) => {
       } else {
         idsString = `"${ids}"`
       }
-      // if (Object.prototype.toString.call(ids) !== '[object Array]') {
-      //   idsString = ids.join(',')
-      // } else {
-      //   idsString = ids
-      // }
-
       try {
         // await this.searchDB.DELETE(ids)
-        await this.searchDB.run(`DELETE FROM t1 WHERE _id in (${idsString});`)
+        await this.searchDB.run(`DELETE FROM nim_msglog WHERE idClient in (${idsString});`)
         this.ftLogFunc('deleteFts success', ids)
       } catch (error) {
         this.ftLogFunc('deleteFts fail: ', error)
@@ -642,24 +605,33 @@ const fullText = (NimSdk: any) => {
 
     public async clearAllFts(): Promise<void> {
       try {
-        console.time('dropTable')
-        await this.searchDB.run('drop table if exists t1')
-        console.timeEnd('dropTable')
-        console.time('createTable')
-        await this.createTable()
-        console.timeEnd('createTable')
-
-        // console.time('deleteTable')
-        // await this.searchDB.run('DELETE FROM t1;')
-        // console.timeEnd('deleteTable')
-        this.ftLogFunc('clearAllFts success')
+        await this.searchDB.run('DELETE FROM `nim_msglog`;')
       } catch (error) {
         this.ftLogFunc('clearAllFts fail: ', error)
         throw error
       }
     }
 
-    public destroy(...args: any): void {
+    public async dropAllFts(): Promise<void> {
+      try {
+        await this.searchDB.run('drop table if exists nim_msglog;')
+        await this.searchDB.run('drop table if exists nim_msglog_fts;')
+        await this.searchDB.run('drop trigger if exists nim_msglog_au;')
+        await this.searchDB.run('drop trigger if exists nim_msglog_ai;')
+        await this.searchDB.run('drop trigger if exists nim_msglog_ad;')
+        await this.createTable()
+        this.ftLogFunc('dropAllFts success')
+      } catch (error) {
+        this.ftLogFunc('dropAllFts fail: ', error)
+        throw error
+      }
+    }
+
+    public destroy(options): void {
+      // 清空队列和定时器，关闭 db。
+      this.timeout && clearTimeout(this.timeout)
+      this.msgStockQueue = []
+      this.msgQueue = []
       new Promise((resolve, reject) => {
         this.searchDB.close(function (err) {
           if (err) {
@@ -670,29 +642,15 @@ const fullText = (NimSdk: any) => {
         })
       })
         .then(() => {
-          this.ftLogFunc('close searchDB success')
+          this.ftLogFunc && this.ftLogFunc('close searchDB success')
+          FullTextNim.instance = null
+          super.destroy(options)
         })
         .catch((error) => {
-          this.ftLogFunc('close searchDB fail: ', error)
+          this.ftLogFunc && this.ftLogFunc('close searchDB fail: ', error)
+          FullTextNim.instance = null
+          super.destroy(options)
         })
-      FullTextNim.instance = null
-      super.destroy(...args)
-    }
-
-    _getLocalMsgsByIdClients(idClients: any): Promise<any> {
-      return new Promise((resolve, reject) => {
-        super.getLocalMsgsByIdClients({
-          idClients,
-          done: (err: any, obj: any) => {
-            if (err) {
-              this.ftLogFunc('_getLocalMsgsByIdClients fail: ', err)
-              return reject(err)
-            }
-            this.ftLogFunc('_getLocalMsgsByIdClients success', obj)
-            resolve(obj)
-          },
-        })
-      })
     }
 
     // 处理QUERY参数
@@ -705,11 +663,14 @@ const fullText = (NimSdk: any) => {
       offset = 0,
       start,
       end,
+      queryOption = this.queryOption,
     }: IQueryParams): string {
-      // `select _id from t1 where text match simple_query('${params.text}') limit ${limit} offset 0;`
       const where: string[] = []
       if (text) {
-        where.push(`\`text\` MATCH simple_query('${text}')`)
+        const queryText = this.formatSQLText(text)
+        where.push(
+          `\`text\` MATCH query('${queryText}', ${queryOption}, ${this.enablePinyin})`
+        )
       }
       if (sessionIds && sessionIds.length > 0) {
         const temp = sessionIds.map((id: string) => `'${id}'`).join(',')
@@ -735,44 +696,17 @@ const fullText = (NimSdk: any) => {
 
       let limitQuery = ''
       if (limit !== Infinity) {
-        limitQuery = `LIMIT ${limit} offset ${offset}`
+        limitQuery = `LIMIT ${limit} OFFSET ${offset}`
       }
       const column = tableColumn
         .slice(1)
-        .map(item => '`' + item + '`')
+        .map((item) => '`' + item + '`')
         .join(', ')
-      const sql = `select \`_id\` as \`idClient\`, ${column} from t1 where ${where.join(
-        ' AND '
-      )} ${order} ${limitQuery}`
+
+      const whereSQL = where.length > 0 ? `where ${where.join(' AND ')}` : ''
+      const sql = `SELECT \`idClient\`, ${column} from nim_msglog_fts ${whereSQL} ${order} ${limitQuery}`
       this.ftLogFunc('_handleQueryParams: ', sql)
       return sql
-    }
-
-    // 分词函数
-    // _cut(text: string): string[] {
-    //   let res: string[]
-    //   if (this.fullSearchCutFunc) {
-    //     res = this.fullSearchCutFunc(text)
-    //   } else {
-    //     res = text.split('')
-    //   }
-    //   return res.filter((word) => !this.ignoreChars.includes(word))
-    // }
-
-    // 补齐时间戳，用以满足search-index的RANGE，参见issue: https://github.com/fergiemcdowall/search-index/issues/542
-    _fillTimeString(t: number): string {
-      // 理论上13位已经是一个很长的时间范围了
-      const maxLength = 13
-      let _t = t + ''
-      if (_t.length < maxLength) {
-        _t = _t.padStart(maxLength, '0')
-      }
-      return _t
-    }
-
-    // 过滤account和sessionId中的符号，因为search-index 不支持符号
-    _filterAccountChar(text: string): string {
-      return text.replace(/[\-\.\_\@]/g, 'ft')
     }
 
     public static async getInstance(initOpt: IInitOpt): Promise<any> {
@@ -787,21 +721,21 @@ const fullText = (NimSdk: any) => {
       return NimSdk.getInstance({
         ...initOpt,
         onroamingmsgs: (obj, ...rest) => {
-          obj && obj.msgs && this.instance?._putFts(obj.msgs)
+          obj && obj.msgs && this.instance?.putFts(obj.msgs)
           initOpt.onroamingmsgs && initOpt.onroamingmsgs(obj, ...rest)
         },
         onofflinemsgs: (obj, ...rest) => {
-          obj && obj.msgs && this.instance?._putFts(obj.msgs)
+          obj && obj.msgs && this.instance?.putFts(obj.msgs)
           initOpt.onofflinemsgs && initOpt.onofflinemsgs(obj, ...rest)
         },
         onmsg: (...args: any) => {
-          this.instance?._putFts(args[0])
+          this.instance?.putFts(args[0])
           initOpt.onmsg && initOpt.onmsg(...args)
         },
         onDeleteMsgSelf: (...args: any) => {
           // 删除 fts
           const msgs = args[0]
-          const ids = msgs && msgs.map(msg => msg.idClient)
+          const ids = msgs && msgs.map((msg) => msg.idClient)
           if (ids) {
             this.instance?.deleteFts(ids)
           }
@@ -815,7 +749,9 @@ const fullText = (NimSdk: any) => {
           initOpt.onsysmsg && initOpt.onsysmsg(obj, ...rest)
         },
         onofflinesysmsgs: (obj, ...rest) => {
-          const ids = obj && obj.map(msg => msg.type === 'deleteMsg' && msg.deletedIdClient)
+          const ids =
+            obj &&
+            obj.map((msg) => msg.type === 'deleteMsg' && msg.deletedIdClient)
           if (ids) {
             this.instance?.deleteFts(ids)
           }

@@ -9,10 +9,12 @@ function doLog(err, obj) {
 }
 
 NIM.getInstance({
-  debug: true,
+  debug: false,
   appKey: 'fe416640c8e8a72734219e1847ad2547',
   account: 'cs6',
   token: 'e10adc3949ba59abbe56e057f20f883e',
+  queryOption: 1,
+  enablePinyin: false,
   // db: form.db,
   // syncSessionUnread: form.syncSessionUnread,
   // autoMarkRead: form.syncSessionUnread,
@@ -52,9 +54,8 @@ NIM.getInstance({
       WindowsPhone: '手机版',
     }
     let str = error.from
-    let errorMsg = `你的帐号于${new Date()}被${
-      map[str] || '其他端'
-    }踢出下线，请确定帐号信息安全!`
+    let errorMsg = `你的帐号于${new Date()}被${map[str] || '其他端'
+      }踢出下线，请确定帐号信息安全!`
     switch (error.code) {
       // 账号或者密码错误, 请跳转到登录页面并提示错误
       case 302:
@@ -115,9 +116,9 @@ NIM.getInstance({
 
   /* 消息 */
   /* 已下三个函数会自动同步到searchDB */
-  onroamingmsgs: function (obj) {},
-  onofflinemsgs: function (obj) {},
-  onmsg: function (obj) {},
+  onroamingmsgs: function (obj) { },
+  onofflinemsgs: function (obj) { },
+  onmsg: function (obj) { },
 
   /* 系统通知 */
   onsysmsg: doLog,
@@ -138,6 +139,19 @@ NIM.getInstance({
     console.log(TAG_NAME, 'onsyncdone')
   },
 }).then((nim) => {
-  console.log('then?')
   window.nim = nim
+  nim.on('ftsDamaged', function (err) {
+    console.log('数据库已经损毁，请调用 rebuildDbIndex 修复', err)
+    nim.rebuildDbIndex()
+  })
+  nim.on('ftsError', function (err) {
+    console.log('sql 执行出错', err)
+  })
+  nim.on('ftsUpsert', function (excuteRow, restRow) {
+    console.log('upsert 进行中，已执行 ', excuteRow, ' 还剩下 ', restRow)
+  })
+  nim.on('ftsStockUpsert', function (excuteRow, otherRow, restRow, lastTime) {
+    console.log('同步进度：', 100 - restRow / window.total * 100)
+    console.log(`upsert 存量数据任务进行中，已执行 ${excuteRow} 条, 另外一个消息队列目前拥有 ${otherRow} 条, 存量数据队列还剩下 ${restRow} 条, 上一条同步的时间是 ${lastTime} `)
+  })
 })

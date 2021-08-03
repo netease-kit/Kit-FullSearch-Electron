@@ -10,7 +10,7 @@
 $ npm install --save kit-fullsearch-electron sqlite3
 ```
 
-采用 sqlite fts5 extension，默认的 sqlite3 并不支持中文分词，故而使用者需要把编译好的 /example/tokenizer 分词文件夹放入主工程根目录下。
+采用 sqlite fts5 extension，默认的 sqlite3 并不支持中文分词，npm install 的过程会下载一个中文分词的 dll。
 
 ## 使用
 
@@ -18,7 +18,7 @@ $ npm install --save kit-fullsearch-electron sqlite3
 const fullText = require('kit-fullsearch-electron').default
 
 // 引入网易云信im sdk
-const SDK = require('./sdk/NIM_Web_SDK_v8.3.0_test')
+const SDK = require('./sdk/NIM_Web_SDK_v8.5.0')
 
 // 使用组件扩展sdk，以支持全文搜索功能
 const NIM = fullText(SDK.NIM)
@@ -32,13 +32,21 @@ NIM.getInstance({
 })
 ```
 
-测试发现在 electron 调试页面连续刷新可能会导致这个 then 没有被触发，因为加载 dll 似乎在调试阶段有点毛病。。
+测试发现在 electron 调试页面连续刷新可能会导致这个 then 没有被触发，因为加载 dll 似乎在调试阶段有点毛病。
 
 组件扩展了以下 nim 的方法，会自动将数据分词后同步到本地的 searchDB。使用组件后，新消息组件会自动同步到 searchDB，历史消息需要通过使用者主动调用 `nim.getLocalMsgsToFts` 来同步到 searchDB 中。
 
+拦截初始化回调
+
 - `onroamingmsgs`
 - `onofflinemsgs`
+- `onofflinesysmsgs`
+- `onsysmsg`
 - `onmsg`
+- `onDeleteMsgSelf`
+
+拦截 API
+
 - `sendText`
 - `sendCustomMsg`
 - `saveMsgsToLocal`
@@ -47,6 +55,7 @@ NIM.getInstance({
 - `deleteAllLocalMsgs`
 - `deleteMsgSelf`
 - `deleteMsgSelfBatch`
+- `destroy`
 
 请使用者按需使用。关于以上 API 的详细介绍，可以查看 nim[官方文档](https://dev.yunxin.163.com/docs/interface/%E5%8D%B3%E6%97%B6%E9%80%9A%E8%AE%AFWeb%E7%AB%AF/NIMSDK-Web/NIM.html)
 
@@ -64,7 +73,9 @@ NIM.getInstance({
 
 #### getLocalMsgsToFts(opt): void
 
-调用 nim 的 getLocalMsgs 查询历史消息，并将数据存入本地 searchDB。参数同 nim.getLocalMsgs。
+调用 nim 的 getLocalMsgs 查询历史消息，并将数据存入本地 sqlite 中。参数同 nim.getLocalMsgs。
+
+在 2.1.0 里做了修改，任务会进入一个队列之中，开发者需要监听事件来获知进度
 
 ```js
 nim.getLocalMsgsToFts({
@@ -75,41 +86,12 @@ nim.getLocalMsgsToFts({
     }
   },
 })
+
+nim.on('ftsStockUpsert', function (excuteRow, otherRow, restRow, lastTime) {
+  console.log('同步进度：', 100 - restRow / window.total * 100)
+  console.log(`upsert 存量数据任务进行中，已执行 ${excuteRow} 条, 另外一个消息队列目前拥有 ${otherRow} 条, 存量数据队列还剩下 ${restRow} 条, 上一条同步的时间是 ${lastTime} `)
+})
 ```
-
-如果本地数据量较大，参考 example 下的办法
-
-```js
-function doSyncOneYear(order = 0) {
-  if (order === 12) {
-    return;
-  }
-  const aYearAgo = new Date().getTime() - 31536000000;
-  const aMonth = 2592000000;
-  const start = aYearAgo + (order * aMonth)
-  const end = start + aMonth
-  console.time('getLocalMsgsToFts')
-  window.nim.getLocalMsgsToFts({
-    start: start, // 起点
-    end: end, // 终点
-    desc: false, // 从start开始查
-    types: ['text', 'custom'], // 只针对文本消息和自定义消息
-    limit: Infinity,
-    done(error, obj) {
-      console.log(
-        '获取并同步本地消息' + (!error ? '成功' : '失败'),
-        error,
-        '开始时间 ' + new Date(start),
-        '结束时间 ' + new Date(end),
-        '共 ' + obj.msgs && obj.msgs.length + ' 条'
-      )
-      console.timeEnd('getLocalMsgsToFts')
-      doSyncOneYear(order + 1)
-    },
-  })
-}
-```
-
 #### queryFts(params: IQueryParams): Promise<any>
 
 参数说明
@@ -145,19 +127,12 @@ nim
   })
 ```
 
-#### putFts(msgs: Msg | Msg[]): Promise<void>
+#### putFts(msgs: Msg | Msg[]): void
 
-新增以及修改 db 中的数据
+新增以及修改 db 中的数据，会进入队列中.
 
 ```js
-nim
-  .putFts(msg)
-  .then((res) => {
-    console.log('修改成功: ', res)
-  })
-  .catch((err) => {
-    console.error('修改失败: ', err)
-  })
+nim.putFts(msg)
 ```
 
 #### deleteFts(ids: string | string[]): Promise<void>
@@ -188,6 +163,46 @@ nim
   .catch((err) => {
     console.error('清空失败: ', err)
   })
+```
+
+#### dropAllFts(): Promise<void>
+
+删除所有表，并重建表结构
+
+```js
+nim
+  .clearAllFts()
+  .then((res) => {
+    console.log('清空成功: ', res)
+  })
+  .catch((err) => {
+    console.error('清空失败: ', err)
+  })
+```
+
+### 新增事件
+
+```js
+// 数据库损毁事件，初始化时会异步检查一遍数据库，若发现数据库损毁会报这个错误
+nim.on('ftsDamaged', function (err) {
+  console.log('数据库已经损毁，请调用 rebuildDbIndex 修复', err)
+  // 调用此 API 尝试性修复
+  nim.rebuildDbIndex()
+})
+// sql 语句执行出错，上报此事件
+nim.on('ftsError', function (err) {
+  console.log('sql 执行出错', err)
+})
+
+// 一般队列执行完一批，上报此事件
+nim.on('ftsUpsert', function (excuteRow, restRow) {
+  console.log('upsert 进行中，已执行 ', excuteRow, ' 还剩下 ', restRow)
+})
+// 特化的 getLocalMsgsToFts API 所创建的队列，每执行完一批，上报此事件
+nim.on('ftsStockUpsert', function (excuteRow, otherRow, restRow, lastTime) {
+  console.log('同步进度：', 100 - restRow / window.total * 100)
+  console.log(`upsert 存量数据任务进行中，已执行 ${excuteRow} 条, 另外一个消息队列目前拥有 ${otherRow} 条, 存量数据队列还剩下 ${restRow} 条, 上一条同步的时间是 ${lastTime} `)
+})
 ```
 
 ## 示例
