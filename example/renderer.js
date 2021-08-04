@@ -37,7 +37,7 @@ NIM.getInstance({
     // }
   },
   onerror() {
-    // alert(JSON.stringify(event))
+    // console.log(JSON.stringify(event))
     // debugger
     console.error(TAG_NAME, 'error')
     // location.href = config.loginUrl

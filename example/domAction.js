@@ -29,7 +29,7 @@ window.onload = (function () {
       const text = $keyword.value || undefined
       const number = $number.value
       if (!number) {
-        alert('请输入写入的条数')
+        console.log('请输入写入的条数')
         return
       }
       if (window.test) {
@@ -49,7 +49,7 @@ window.onload = (function () {
       let start = $('#q-start').value
       let end = $('#q-end').value
       // if (!text && !sessionIds && !froms) {
-      //   alert('请输入查询的 关键字 或 sessionId 或 froms')
+      //   console.log('请输入查询的 关键字 或 sessionId 或 froms')
       //   return
       // }
       start = start
@@ -79,11 +79,9 @@ window.onload = (function () {
           .then((res) => {
             const _end = performance.now()
             console.log(TAG_NAME, `查询成功，耗时: ${_end - _start} ms`, res)
-            alert(`查询成功，耗时: ${_end - _start} ms`)
           })
           .catch((err) => {
             console.error(TAG_NAME, '查询失败：', err)
-            alert('查询失败')
           })
       }
     }
@@ -91,12 +89,12 @@ window.onload = (function () {
     else if (hasClass(target, 'j-query-indexdb')) {
       const value = $('#q-idClient').value
       if (!value) {
-        alert('请输入要查询的idClient')
+        console.log('请输入要查询的idClient')
         return
       }
       if (window.test) {
         window.test.readByPrimary(value)
-        // alert('查询成功')
+        // console.log('查询成功')
       }
     }
     // 发送
@@ -104,7 +102,7 @@ window.onload = (function () {
       const $keyword = $('#s-keyword')
       const value = $keyword.value
       if (!value) {
-        alert('请输入要发送的消息内容')
+        console.log('请输入要发送的消息内容')
         return
       }
       window.nim &&
@@ -116,7 +114,7 @@ window.onload = (function () {
             if (err) return
             // 发送失败的时候可能无 idClient
             if (!obj.idClient) return
-            alert('发送成功')
+            console.log('发送成功')
           },
         })
     }
@@ -126,18 +124,18 @@ window.onload = (function () {
         window.nim
           .clearAllFts()
           .then(() => {
-            alert('清空成功')
+            console.log('清空成功')
           })
           .catch(() => {
-            alert('清空失败！')
+            console.log('清空失败！')
           })
     } else if (hasClass(target, 'j-drop')) {
       window.nim && window.nim.dropAllFts()
         .then(() => {
-          alert('删除所有表并重建成功')
+          console.log('删除所有表并重建成功')
         })
         .catch(() => {
-          alert('操作失败！')
+          console.log('操作失败！')
         })
     }
     // 同步消息

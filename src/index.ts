@@ -667,10 +667,17 @@ const fullText = (NimSdk: any) => {
     }: IQueryParams): string {
       const where: string[] = []
       if (text) {
+        const matchRegex = new RegExp(/^[0-9a-zA-Z]+$/)
         const queryText = this.formatSQLText(text)
-        where.push(
-          `\`text\` MATCH query('${queryText}', ${queryOption}, ${this.enablePinyin})`
-        )
+        if (matchRegex.test(text)) {
+          where.push(
+            `\`text\` LIKE '%${text}%'`
+          )
+        } else {
+          where.push(
+            `\`text\` MATCH query('${queryText}', ${queryOption}, ${this.enablePinyin})`
+          )
+        }
       }
       if (sessionIds && sessionIds.length > 0) {
         const temp = sessionIds.map((id: string) => `'${id}'`).join(',')
