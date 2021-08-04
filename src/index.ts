@@ -566,7 +566,7 @@ const fullText = (NimSdk: any) => {
                 msg.fromNick,
                 msg.content
               ])
-              // .catch((err) => { that.emit('ftsError', err) })
+              .catch((err) => { that.emit('ftsError', err) })
             })
             this.searchDB.exec('COMMIT;', function (err) {
               if (err) {
