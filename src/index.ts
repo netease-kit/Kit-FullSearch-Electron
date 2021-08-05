@@ -671,7 +671,7 @@ const fullText = (NimSdk: any) => {
         const queryText = this.formatSQLText(text)
         if (matchRegex.test(text)) {
           where.push(
-            `\`text\` LIKE '%${text}%'`
+            `\`text\` MATCH '"${text}"*'`
           )
         } else {
           where.push(
