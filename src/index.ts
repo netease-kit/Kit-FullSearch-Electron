@@ -667,11 +667,11 @@ const fullText = (NimSdk: any) => {
     }: IQueryParams): string {
       const where: string[] = []
       if (text) {
-        const matchRegex = new RegExp(/^[0-9a-zA-Z]+$/)
+        const matchRegex = new RegExp(/^[0-9a-zA-Z]+|[\u4e00-\u9fa5]+[0-9a-zA-Z]+$/)
         const queryText = this.formatSQLText(text)
         if (matchRegex.test(text)) {
           where.push(
-            `\`text\` MATCH '"${text}"*'`
+            `\`text\` GLOB '*${text}*'`
           )
         } else {
           where.push(
