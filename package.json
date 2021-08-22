@@ -53,6 +53,7 @@
   "dependencies": {
     "download": "^8.0.0",
     "just-scripts": "^1.5.4",
+    "log4js": "^6.3.0",
     "sqlite3": "^5.0.2"
   }
 }

@@ -1,10 +1,13 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable @typescript-eslint/no-this-alias */
 import { logger } from './logger'
+import { configure, getLogger } from 'log4js'
 import { promisify, promisifyForDone } from './utils'
 import { IFullTextNim, IInitOpt, QueryOption, IQueryParams, IMsg } from './type'
 import * as path from 'path'
 import * as os from 'os'
+// import fs from 'fs'
+const fs = require('fs')
 const sqlite3 = require('sqlite3').verbose()
 
 const tableColumn = [
@@ -40,6 +43,7 @@ const fullText = (NimSdk: any) => {
     msgStockQueue: any[]
     msgQueue: any[]
     timeout: number
+    logger: any
 
     constructor(initOpt: IInitOpt) {
       super(initOpt)
@@ -55,21 +59,7 @@ const fullText = (NimSdk: any) => {
         ftLogFunc,
         fullSearchCutFunc,
       } = initOpt
-
-      // 初始化logger
-      if (debug) {
-        this.ftLogFunc = logger.log.bind(logger)
-      } else {
-        this.ftLogFunc = (): void => {
-          // i'm empty
-        }
-      }
-      if (ftLogFunc) {
-        this.ftLogFunc = ftLogFunc
-      }
-
       if (!account || !appKey) {
-        this.ftLogFunc('invalid init params!')
         throw new Error('invalid init params!')
       }
       this.queryOption = queryOption || QueryOption.kDefault
@@ -79,6 +69,28 @@ const fullText = (NimSdk: any) => {
       this.msgQueue = []
       this.msgStockQueue = []
       this.timeout = 0
+
+      // 初始化logger
+      configure({
+        appenders: { ftsLog: { type: "file", filename: path.join(this.searchDBPath, this.searchDBName + '.log') } },
+        categories: { default: { appenders: ["ftsLog"], level: "ALL" } }
+      })
+      this.logger = getLogger()
+      if (debug) {
+        this.ftLogFunc = logger.log.bind(logger)
+      } else {
+        this.ftLogFunc = (...args: any): void => {
+          this.logger.info(...args)
+        }
+      }
+
+      if (ftLogFunc) {
+        this.ftLogFunc = (...args: any): void => {
+          ftLogFunc(...args)
+          this.logger.info(...args)
+        }
+      }
+
       if (fullSearchCutFunc) {
         this.fullSearchCutFunc = fullSearchCutFunc
       }
@@ -89,26 +101,36 @@ const fullText = (NimSdk: any) => {
         ? path.join(this.searchDBPath, `${this.searchDBName}.sqlite`)
         : `${this.searchDBName}.sqlite`
       const that = this
-      this.searchDB = await new Promise(function (resolve, reject) {
-        const db = new sqlite3.Database(finalName, function (err) {
-          if (err) {
-            that.ftLogFunc('initDB fail: ', err)
-            reject(err)
-            return
-          }
-          that.ftLogFunc('initDB success')
-          resolve(db)
-        })
-      })
-      this.searchDB.run = promisify(this.searchDB.run, this.searchDB)
-      this.searchDB.all = promisify(this.searchDB.all, this.searchDB)
-      // this.searchDB.close = promisify(this.searchDB.close, this.searchDB)
-      await this.loadExtension()
-      await this.createTable()
-      await this.loadDict()
 
-      // 检查 db，异步检查即可
-      this.checkDbSafe()
+      let reopen: boolean = false
+      do {
+        try {
+          this.searchDB = await new Promise(function (resolve, reject) {
+            const db = new sqlite3.Database(finalName, function (err) {
+              if (err) {
+                that.ftLogFunc('failed to open database: ', err)
+                reject(err)
+                return
+              }
+              that.ftLogFunc('open database successfully')
+              resolve(db)
+            })
+          })
+          this.searchDB.run = promisify(this.searchDB.run, this.searchDB)
+          this.searchDB.all = promisify(this.searchDB.all, this.searchDB)
+          // this.searchDB.close = promisify(this.searchDB.close, this.searchDB)
+          await this.loadExtension()
+          await this.createTable()
+          this.checkDbSafe()
+          await this.loadDict()
+          await this.backupDBFile()
+          reopen = false
+        } catch (err) {
+          this.logger.error(`failed to initialize database, error: ${err}`)
+          await this.restoreDBFile()
+          reopen = true
+        }
+      } while (reopen)
     }
 
     public async loadExtension(filePath?: string): Promise<void> {
@@ -128,6 +150,7 @@ const fullText = (NimSdk: any) => {
         )
       }
       await new Promise((resolve, reject) => {
+        this.logger.info(`Load extension from file: ${filePath}`)
         this.searchDB.loadExtension(filePath, function (err) {
           if (err) {
             reject(err)
@@ -139,19 +162,54 @@ const fullText = (NimSdk: any) => {
     }
 
     public async loadDict(): Promise<void> {
+      const resourcePath = path.resolve(
+        path
+          .join(__dirname)
+          .replace(/^(.+)asar(.node_modules.+)$/, '$1asar.unpacked$2')
+      )
+      const dictPath = path
+        .join(resourcePath, 'dict')
+        .concat(process.platform === 'win32' ? '\\' : '/')
+      await this.searchDB.run(`SELECT jieba_dict("${dictPath}")`)
+    }
+
+    public async backupDBFile(): Promise<void> {
+      const srcFile = path.join(this.searchDBPath, `${this.searchDBName}.sqlite`)
+      const dstFile = path.join(this.searchDBPath, `${this.searchDBName}.sqlite.backup`)
       try {
-        const resourcePath = path.resolve(
-          path
-            .join(__dirname)
-            .replace(/^(.+)asar(.node_modules.+)$/, '$1asar.unpacked$2')
-        )
-        const dictPath = path
-          .join(resourcePath, 'dict')
-          .concat(process.platform === 'win32' ? '\\' : '/')
-        await this.searchDB.run(`SELECT jieba_dict("${dictPath}")`)
+        // remove exists backup DB file
+        if (fs.existsSync(dstFile)) {
+          fs.unlinkSync(dstFile)
+        }
+        fs.copyFileSync(srcFile, dstFile)
+        this.ftLogFunc(`backup DB file from ${srcFile} to ${dstFile}`)
       } catch (err) {
-        this.ftLogFunc('failed to load jieba dict: ', err)
+        this.ftLogFunc(`failed to backup DB file from ${srcFile} to ${dstFile}, error: ${err}`)
       }
+    }
+
+    public async restoreDBFile(): Promise<void> {
+      const srcFile = path.join(this.searchDBPath, `${this.searchDBName}.sqlite.backup`)
+      const dstFile = path.join(this.searchDBPath, `${this.searchDBName}.sqlite`)
+      return new Promise((resolve, reject) => {
+        this.searchDB.close((err) => {
+          if (err) {
+            reject(err)
+          } else {
+            resolve({})
+          }
+        })
+      }).then(() => {
+        if (fs.existsSync(dstFile)) {
+          fs.unlinkSync(dstFile)
+        }
+        fs.copyFileSync(srcFile, dstFile)
+        // remove backup file
+        fs.unlinkSync(srcFile)
+        this.ftLogFunc(`restore DB file from ${srcFile} to ${dstFile}`)
+      }).catch(() => {
+        this.ftLogFunc(`failed to restore DB file.`)
+      })
     }
 
     public async checkDbSafe(): Promise<void> {
@@ -159,6 +217,8 @@ const fullText = (NimSdk: any) => {
         await this.searchDB.run(`INSERT INTO nim_msglog_fts(nim_msglog_fts) VALUES('integrity-check');`)
       } catch (err) {
         this.emit('ftsDamaged', err)
+        this.logger.error(err)
+        throw new Error(err)
       }
     }
 
@@ -172,86 +232,82 @@ const fullText = (NimSdk: any) => {
     }
 
     public async createTable(): Promise<void> {
-      try {
-        // simple 0 是为了禁止拼音
-        await this.searchDB.run(`
-          CREATE TABLE IF NOT EXISTS "nim_msglog" (
-            "id"        INTEGER PRIMARY KEY AUTOINCREMENT,
-            "idClient"  TEXT NOT NULL UNIQUE,
-            "text"      TEXT,
-            "sessionId" TEXT NOT NULL,
-            "from"      TEXT NOT NULL,
-            "time"      INTEGER NOT NULL,
-            "target"    TEXT NOT NULL,
-            "to"        TEXT NOT NULL,
-            "type"      TEXT,
-            "scene"     TEXT,
-            "idServer"  TEXT NOT NULL,
-            "fromNick"  TEXT,
-            "content"   TEXT
-          );`
-        )
-        await this.searchDB.run(`
-          CREATE VIRTUAL TABLE IF NOT EXISTS nim_msglog_fts USING fts5(
-            [idClient] UNINDEXED,
-            [text],
-            [sessionId] UNINDEXED,
-            [from] UNINDEXED,
-            [time] UNINDEXED,
-            [target] UNINDEXED,
-            [to] UNINDEXED,
-            [type] UNINDEXED,
-            [scene] UNINDEXED,
-            [idServer] UNINDEXED,
-            [fromNick] UNINDEXED,
-            [content] UNINDEXED,
-            content = [nim_msglog], content_rowid = id, tokenize = 'simple 0'
-          );`
-        )
-        await this.searchDB.run(`
-          CREATE TRIGGER IF NOT EXISTS nim_msglog_ai AFTER INSERT ON nim_msglog 
-          BEGIN 
-            INSERT INTO nim_msglog_fts (
-              rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
-            ) VALUES (
-              new.id,new.idClient,new.text,new.sessionId,new.[from],new.time,new.target,
-              new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
-            );
-          END;`
-        )
-        await this.searchDB.run(`
-          CREATE TRIGGER IF NOT EXISTS nim_msglog_ad AFTER DELETE ON nim_msglog
-          BEGIN
-            INSERT INTO nim_msglog_fts (
-              nim_msglog_fts,rowid,idClient,text,sessionId,[from],
-              time,target,[to],type,scene,idServer,fromNick,content
-            ) VALUES (
-              'delete',old.id,old.idClient,old.text,old.sessionId,old.[from],old.time,old.target,
-              old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
-            );
-          END;`
-        )
-        await this.searchDB.run(`
-          CREATE TRIGGER IF NOT EXISTS nim_msglog_au AFTER UPDATE ON nim_msglog
-          BEGIN
-            INSERT INTO nim_msglog_fts (
-              nim_msglog_fts,rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
-            ) VALUES (
-              'delete',old.id,old.idClient,old.text,old.sessionId,old.[from],old.time,
-              old.target,old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
-            );
-            INSERT INTO nim_msglog_fts (
-              rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
-            ) VALUES (
-              new.id,new.idClient,new.text,new.sessionId,new.[from],
-              new.time,new.target,new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
-            );
-          END;`
-        )
-      } catch (err) {
-        this.ftLogFunc('create VIRTUAL table failed: ', err)
-        this.emit('ftsError', err)
-      }
+      // simple 0 是为了禁止拼音
+      await this.searchDB.run(`
+        CREATE TABLE IF NOT EXISTS "nim_msglog" (
+          "id"        INTEGER PRIMARY KEY AUTOINCREMENT,
+          "idClient"  TEXT NOT NULL UNIQUE,
+          "text"      TEXT,
+          "sessionId" TEXT NOT NULL,
+          "from"      TEXT NOT NULL,
+          "time"      INTEGER NOT NULL,
+          "target"    TEXT NOT NULL,
+          "to"        TEXT NOT NULL,
+          "type"      TEXT,
+          "scene"     TEXT,
+          "idServer"  TEXT NOT NULL,
+          "fromNick"  TEXT,
+          "content"   TEXT
+        );`
+      )
+      await this.searchDB.run(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS nim_msglog_fts USING fts5(
+          [idClient] UNINDEXED,
+          [text],
+          [sessionId] UNINDEXED,
+          [from] UNINDEXED,
+          [time] UNINDEXED,
+          [target] UNINDEXED,
+          [to] UNINDEXED,
+          [type] UNINDEXED,
+          [scene] UNINDEXED,
+          [idServer] UNINDEXED,
+          [fromNick] UNINDEXED,
+          [content] UNINDEXED,
+          content = [nim_msglog], content_rowid = id, tokenize = 'simple 0'
+        );`
+      )
+      await this.searchDB.run(`
+        CREATE TRIGGER IF NOT EXISTS nim_msglog_ai AFTER INSERT ON nim_msglog 
+        BEGIN 
+          INSERT INTO nim_msglog_fts (
+            rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+          ) VALUES (
+            new.id,new.idClient,new.text,new.sessionId,new.[from],new.time,new.target,
+            new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
+          );
+        END;`
+      )
+      await this.searchDB.run(`
+        CREATE TRIGGER IF NOT EXISTS nim_msglog_ad AFTER DELETE ON nim_msglog
+        BEGIN
+          INSERT INTO nim_msglog_fts (
+            nim_msglog_fts,rowid,idClient,text,sessionId,[from],
+            time,target,[to],type,scene,idServer,fromNick,content
+          ) VALUES (
+            'delete',old.id,old.idClient,old.text,old.sessionId,old.[from],old.time,old.target,
+            old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
+          );
+        END;`
+      )
+      await this.searchDB.run(`
+        CREATE TRIGGER IF NOT EXISTS nim_msglog_au AFTER UPDATE ON nim_msglog
+        BEGIN
+          INSERT INTO nim_msglog_fts (
+            nim_msglog_fts,rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+          ) VALUES (
+            'delete',old.id,old.idClient,old.text,old.sessionId,old.[from],old.time,
+            old.target,old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
+          );
+          INSERT INTO nim_msglog_fts (
+            rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+          ) VALUES (
+            new.id,new.idClient,new.text,new.sessionId,new.[from],
+            new.time,new.target,new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
+          );
+        END;`
+      )
+      this.logger.info('create tables successfully')
     }
 
     public sendText(opt: any): any {
@@ -546,6 +602,7 @@ const fullText = (NimSdk: any) => {
 
     async _doInsert(msgs: IMsg[]): Promise<void> {
       const that = this
+      this.logger.info(`insert data to database, length: ${msgs.length}, timetag from ${msgs[0].time} to ${msgs[msgs.length - 1].time}`)
       return new Promise((resolve, reject) => {
         const column = tableColumn.map(() => '?').join(',')
         this.searchDB.serialize(async () => {
@@ -594,7 +651,7 @@ const fullText = (NimSdk: any) => {
         idsString = `"${ids}"`
       }
       try {
-        // await this.searchDB.DELETE(ids)
+        this.logger.info(`delete data from database, ids: ${idsString}`)
         await this.searchDB.run(`DELETE FROM nim_msglog WHERE idClient in (${idsString});`)
         this.ftLogFunc('deleteFts success', ids)
       } catch (error) {
