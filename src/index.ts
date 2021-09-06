@@ -68,9 +68,7 @@ const fullText = (NimSdk: any) => {
       this.msgQueue = []
       this.msgStockQueue = []
       this.timeout = 0
-      this.searchDB.run = promisify(this.searchDB.run, this.searchDB)
-      this.searchDB.all = promisify(this.searchDB.all, this.searchDB)
-
+      
       // 初始化logger
       configure({
         appenders: {
@@ -115,6 +113,10 @@ const fullText = (NimSdk: any) => {
       await this.loadDict()
       await this.backupDBFile()
       this.checkDbSafe()
+
+      this.searchDB.run = promisify(this.searchDB.run, this.searchDB)
+      this.searchDB.all = promisify(this.searchDB.all, this.searchDB)
+
 
       // let reopen = false
       // do {
@@ -786,9 +788,9 @@ const fullText = (NimSdk: any) => {
         let error = null
         try {
           await this.instance.initDB()
-          this.logger.info(`Init DB successfully`)
+          console.log(`Init DB successfully`)
         } catch (err) {
-          this.logger.error(`Failed to initialize database, error: ${err.message}`)
+          console.error(`Failed to initialize database, error: ${err.message}`)
           error = err
         }
         // 如果 initdb 出错了，那么尝试从备份恢复，然后在重新打开 db，最后实在恢复不动则抛出错误给上层
