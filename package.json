@@ -21,7 +21,8 @@
   "scripts": {
     "install": "just install",
     "build": "npx tsc",
-    "p": "npm run build && npm publish"
+    "p": "npm run build && npm publish",
+    "postinstall": "npm run build"
   },
   "repository": {
     "type": "git",
