@@ -107,28 +107,14 @@ const fullText = (NimSdk: any) => {
           resolve(db)
         })
       })
+      this.searchDB.run = promisify(this.searchDB.run, this.searchDB)
+      this.searchDB.all = promisify(this.searchDB.all, this.searchDB)
       // this.searchDB.close = promisify(this.searchDB.close, this.searchDB)
       await this.loadExtension()
       await this.createTable()
       await this.loadDict()
       await this.backupDBFile()
       this.checkDbSafe()
-
-      this.searchDB.run = promisify(this.searchDB.run, this.searchDB)
-      this.searchDB.all = promisify(this.searchDB.all, this.searchDB)
-
-
-      // let reopen = false
-      // do {
-      //   try {
-          
-      //     reopen = false
-      //   } catch (err) {
-      //     this.logger.error(`failed to initialize database, error: ${err}`)
-      //     await this.restoreDBFile()
-      //     reopen = true
-      //   }
-      // } while (reopen)
     }
 
     public async loadExtension(filePath?: string): Promise<void> {
