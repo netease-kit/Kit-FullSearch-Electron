@@ -206,10 +206,10 @@ class Test {
       //   ...temp,
       //   text: txt,
       // });
-      console.log('插入了', {
-        ...temp,
-        text: txt,
-      })
+      // console.log('插入了', {
+      //   ...temp,
+      //   text: txt,
+      // })
       objectStore.add({
         ...temp,
         text: txt,

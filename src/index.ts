@@ -41,7 +41,7 @@ const fullText = (NimSdk: any) => {
     fullSearchCutFunc?: (text: string) => string[]
     msgStockQueue: any[]
     msgQueue: any[]
-    timeout: number
+    timeout: any
     logger: any
 
     constructor(initOpt: IInitOpt) {
@@ -466,13 +466,22 @@ const fullText = (NimSdk: any) => {
         opt.done && opt.done(err, null)
       }
 
-      const msgs: IMsg[] = obj.msgs
+      let msgs: any = obj.msgs
 
       if (msgs && msgs.length > 0) {
         this.putFts(msgs || [], true)
       }
 
-      opt.done && opt.done(null, obj)
+      const length = msgs.length
+      const lastTime = msgs[length - 1].time
+
+      // 解除引用
+      msgs = null;
+
+      opt.done && opt.done(null, {
+        length,
+        lastTime
+      })
     }
 
     public async queryFts(params: IQueryParams): Promise<any> {
@@ -515,10 +524,11 @@ const fullText = (NimSdk: any) => {
       }
       // 设置定时器，开始同步
       if (!this.timeout) {
-        this.timeout = (setTimeout(() => {
-          this._putFts(isStock)
-        }, 0) as unknown) as number
+        this.timeout = setTimeout(this._putFts.bind(this, isStock), 0)
       }
+
+      // @ts-ignore
+      msgs = null
     }
 
     async _putFts(isStock = false): Promise<void> {
@@ -526,15 +536,21 @@ const fullText = (NimSdk: any) => {
       if (!this.msgQueue) {
         return
       }
-      const msgs = isStock
+      let msgs: any = isStock
         ? this.msgStockQueue.splice(0, 3000)
         : this.msgQueue.splice(0, 3000)
 
       // const { inserts, updates } = await this._getMsgsWithInsertAndUpdate(msgs)
-      const fts = await this._getMsgsWithInsertAndUpdate(msgs)
+      let fts: any = await this._getMsgsWithInsertAndUpdate(msgs)
+      const ftsLength = fts.length
+      const ftsLastTime = fts[fts.length - 1].time
+      // 解除引用
+      msgs = null
 
       if (fts.length > 0) {
         await this._doInsert(fts)
+        // 尝试解除引用
+        fts = null
         // 当 msgQueue 为 null 或者 undefined 时，当作实例已经销毁，此定时触发的任务直接作废
         if (!this.msgQueue) {
           return
@@ -542,42 +558,61 @@ const fullText = (NimSdk: any) => {
         isStock
           ? this.emit(
             'ftsStockUpsert',
-            fts.length,
+            ftsLength,
             this.msgQueue.length,
             this.msgStockQueue.length,
-            fts[fts.length - 1].time
+            ftsLastTime
           )
-          : this.emit('ftsUpsert', fts.length, this.msgQueue.length)
+          : this.emit('ftsUpsert', ftsLength, this.msgQueue.length)
+      }
+
+      if (this.msgStockQueue.length === 0 && this.msgQueue.length === 0) {
+        // clearTimeout(this.timeout)
+        this.timeout = 0
+        return
       }
 
       // 队列里还存在未同步的，那么继续定时执行
-      if (this.msgStockQueue.length > 0) {
-        this.timeout = (setTimeout(() => {
-          this._putFts(true)
-        }, 100) as unknown) as number
-      } else if (this.msgQueue.length > 0) {
-        this.timeout = (setTimeout(() => {
-          this._putFts()
-        }, 100) as unknown) as number
-      } else {
-        this.timeout = 0
-      }
+      this.timeout = this.msgStockQueue.length > 0 ?
+        setTimeout(this._putFts.bind(this, true), 100) :
+        setTimeout(this._putFts.bind(this), 100)
+      
 
     }
 
     async _getMsgsWithInsertAndUpdate(msgs: IMsg[]): Promise<IMsg[]> {
       // 去重
-      const map = msgs.reduce((total, next) => {
-        if (next.idClient) {
-          total[next.idClient] = next
-        }
-        return total
-      }, {})
-      msgs = Object.keys(map).map((key) => map[key])
-      const fts = msgs
-        .filter((msg) => msg.text && msg.idClient)
-        .map((msg) => {
-          return {
+      // const map = msgs.reduce((total, next) => {
+      //   if (next.idClient) {
+      //     total[next.idClient] = next
+      //   }
+      //   return total
+      // }, {})
+      // msgs = Object.keys(map).map((key) => map[key])
+      // const fts = msgs
+      //   .filter((msg) => msg.text && msg.idClient)
+      //   .map((msg) => {
+      //     return {
+      //       _id: msg.idClient,
+      //       text: msg.text,
+      //       sessionId: msg.sessionId,
+      //       from: msg.from,
+      //       time: msg.time,
+      //       target: msg.target,
+      //       to: msg.to,
+      //       type: msg.type,
+      //       scene: msg.scene,
+      //       idServer: msg.idServer,
+      //       fromNick: msg.fromNick,
+      //       content: msg.content,
+      //     }
+      //   })
+      let map: any = {}
+      const fts: IMsg[] = [];
+      msgs.forEach((msg: any) => {
+        // text 内容存在，idClient 存在，在去重的 map 中找不到已经存在过的
+        if (msg && msg.text && msg.idClient && !map[msg.idClient]) {
+          fts.push({
             _id: msg.idClient,
             text: msg.text,
             sessionId: msg.sessionId,
@@ -590,8 +625,14 @@ const fullText = (NimSdk: any) => {
             idServer: msg.idServer,
             fromNick: msg.fromNick,
             content: msg.content,
-          }
-        })
+          })
+          map[msg.idClient] = true 
+          Object.keys(msg).forEach((item: any) => { item = null })
+          msg = null
+        }
+      })
+      // 解除引用.
+      map = null
       return fts
     }
 
@@ -600,10 +641,10 @@ const fullText = (NimSdk: any) => {
       this.logger.info(`insert data to database, length: ${msgs.length}, timetag from ${msgs[0].time} to ${msgs[msgs.length - 1].time}`)
       return new Promise((resolve, reject) => {
         const column = tableColumn.map(() => '?').join(',')
-        this.searchDB.serialize(async () => {
+        this.searchDB.serialize(() => {
           try {
             this.searchDB.exec('BEGIN TRANSACTION;')
-            msgs.forEach((msg) => {
+            msgs.forEach((msg: any) => {
               this.searchDB.run(`INSERT OR IGNORE INTO \`nim_msglog\` VALUES(NULL,${column});`, [
                 msg._id,
                 msg.text,
@@ -619,6 +660,9 @@ const fullText = (NimSdk: any) => {
                 msg.content
               ])
               .catch((err) => { that.emit('ftsError', err) })
+
+              Object.keys(msg).forEach((item: any) => { item = null })
+              msg = null
             })
             this.searchDB.exec('COMMIT;', function (err) {
               if (err) {

@@ -156,7 +156,7 @@ window.onload = (function () {
       }
     }
     else if (hasClass(target, 'j-write-indexdb')) {
-      window.test.writeDataInIndexDB(50000)
+      window.test.writeDataInIndexDB(100000)
     }
     else if (hasClass(target, 'j-write-indexdb-ascii')) {
       let txt = ''
@@ -177,10 +177,10 @@ function doSyncByLimit(start = 0) {
     limit: 3000,
     // limit: 10,
     done(error, obj) {
-      if (obj.msgs && obj.msgs.length > 0) {
-        console.log('从 indexdb 里取出了一批 ', obj.msgs.length)
-        window.total += obj.msgs.length;
-        const time = obj.msgs[obj.msgs.length - 1].time
+      if (obj.length > 0) {
+        console.log('从 indexdb 里取出了一批 ', obj.length)
+        window.total += obj.length;
+        const time = obj.lastTime
         doSyncByLimit(time)
       }
     },
