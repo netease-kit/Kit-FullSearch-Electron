@@ -448,9 +448,9 @@ const fullText = (NimSdk: any) => {
     }
 
     public async getLocalMsgsToFts(opt: any): Promise<any> {
-      let obj
+      let msgs
       try {
-        obj = await new Promise((resolve, reject) => {
+        msgs = await new Promise((resolve, reject) => {
           super.getLocalMsgs({
             ...opt,
             done: (err: any, obj: any) => {
@@ -458,7 +458,13 @@ const fullText = (NimSdk: any) => {
                 reject(err)
                 return
               }
-              resolve(obj)
+              resolve(
+                obj.msgs && obj.msgs.filter(item => item.text && item.idClient)
+                  .map(item => {
+                    item.id = item.idClient
+                    return item;
+                  })
+              )
             },
           })
         })
@@ -466,9 +472,9 @@ const fullText = (NimSdk: any) => {
         opt.done && opt.done(err, null)
       }
 
-      let msgs: any = obj.msgs
+      // let msgs: any = obj.msgs
       const length = msgs.length
-      const lastTime = msgs[length - 1].time
+      const lastTime = length > 0 ? msgs[length - 1].time : undefined
 
       if (msgs && msgs.length > 0) {
         this.putFts(msgs || [], true)
@@ -521,13 +527,13 @@ const fullText = (NimSdk: any) => {
       } else {
         this.msgQueue = this.msgQueue.concat(msgs)
       }
+
+      // @ts-ignore
+      msgs = null
       // 设置定时器，开始同步
       if (!this.timeout) {
         this.timeout = setTimeout(this._putFts.bind(this, isStock), 0)
       }
-
-      // @ts-ignore
-      msgs = null
     }
 
     async _putFts(isStock = false): Promise<void> {
@@ -540,15 +546,17 @@ const fullText = (NimSdk: any) => {
         : this.msgQueue.splice(0, 3000)
 
       // const { inserts, updates } = await this._getMsgsWithInsertAndUpdate(msgs)
-      let fts: any = await this._getMsgsWithInsertAndUpdate(msgs)
-      const ftsLength = fts.length
-      const ftsLastTime = fts[fts.length - 1].time
+      // let fts: any = await this._getMsgsWithInsertAndUpdate(msgs)
+      let fts: any = msgs
       // 解除引用
       msgs = null
+      const ftsLength = fts.length
+      const ftsLastTime = fts[fts.length - 1].time
+      
 
       if (fts.length > 0) {
         await this._doInsert(fts)
-        // 尝试解除引用
+        // 解除引用
         fts = null
         // 当 msgQueue 为 null 或者 undefined 时，当作实例已经销毁，此定时触发的任务直接作废
         if (!this.msgQueue) {
@@ -573,67 +581,67 @@ const fullText = (NimSdk: any) => {
 
       // 队列里还存在未同步的，那么继续定时执行
       this.timeout = this.msgStockQueue.length > 0 ?
-        setTimeout(this._putFts.bind(this, true), 100) :
-        setTimeout(this._putFts.bind(this), 100)
+        setTimeout(this._putFts.bind(this, true), 0) :
+        setTimeout(this._putFts.bind(this), 0)
       
 
     }
 
-    async _getMsgsWithInsertAndUpdate(msgs: IMsg[]): Promise<IMsg[]> {
-      // 去重
-      // const map = msgs.reduce((total, next) => {
-      //   if (next.idClient) {
-      //     total[next.idClient] = next
-      //   }
-      //   return total
-      // }, {})
-      // msgs = Object.keys(map).map((key) => map[key])
-      // const fts = msgs
-      //   .filter((msg) => msg.text && msg.idClient)
-      //   .map((msg) => {
-      //     return {
-      //       _id: msg.idClient,
-      //       text: msg.text,
-      //       sessionId: msg.sessionId,
-      //       from: msg.from,
-      //       time: msg.time,
-      //       target: msg.target,
-      //       to: msg.to,
-      //       type: msg.type,
-      //       scene: msg.scene,
-      //       idServer: msg.idServer,
-      //       fromNick: msg.fromNick,
-      //       content: msg.content,
-      //     }
-      //   })
-      let map: any = {}
-      const fts: IMsg[] = [];
-      msgs.forEach((msg: any) => {
-        // text 内容存在，idClient 存在，在去重的 map 中找不到已经存在过的
-        if (msg && msg.text && msg.idClient && !map[msg.idClient]) {
-          fts.push({
-            _id: msg.idClient,
-            text: msg.text,
-            sessionId: msg.sessionId,
-            from: msg.from,
-            time: msg.time,
-            target: msg.target,
-            to: msg.to,
-            type: msg.type,
-            scene: msg.scene,
-            idServer: msg.idServer,
-            fromNick: msg.fromNick,
-            content: msg.content,
-          })
-          map[msg.idClient] = true 
-          Object.keys(msg).forEach((item: any) => { item = null })
-          msg = null
-        }
-      })
-      // 解除引用.
-      map = null
-      return fts
-    }
+    // async _getMsgsWithInsertAndUpdate(msgs: IMsg[]): Promise<IMsg[]> {
+    //   // 去重
+    //   // const map = msgs.reduce((total, next) => {
+    //   //   if (next.idClient) {
+    //   //     total[next.idClient] = next
+    //   //   }
+    //   //   return total
+    //   // }, {})
+    //   // msgs = Object.keys(map).map((key) => map[key])
+    //   // const fts = msgs
+    //   //   .filter((msg) => msg.text && msg.idClient)
+    //   //   .map((msg) => {
+    //   //     return {
+    //   //       _id: msg.idClient,
+    //   //       text: msg.text,
+    //   //       sessionId: msg.sessionId,
+    //   //       from: msg.from,
+    //   //       time: msg.time,
+    //   //       target: msg.target,
+    //   //       to: msg.to,
+    //   //       type: msg.type,
+    //   //       scene: msg.scene,
+    //   //       idServer: msg.idServer,
+    //   //       fromNick: msg.fromNick,
+    //   //       content: msg.content,
+    //   //     }
+    //   //   })
+    //   let map: any = {}
+    //   const fts: IMsg[] = [];
+    //   msgs.forEach((msg: any) => {
+    //     // text 内容存在，idClient 存在，在去重的 map 中找不到已经存在过的
+    //     if (msg && msg.text && msg.idClient && !map[msg.idClient]) {
+    //       fts.push({
+    //         _id: msg.idClient,
+    //         text: msg.text,
+    //         sessionId: msg.sessionId,
+    //         from: msg.from,
+    //         time: msg.time,
+    //         target: msg.target,
+    //         to: msg.to,
+    //         type: msg.type,
+    //         scene: msg.scene,
+    //         idServer: msg.idServer,
+    //         fromNick: msg.fromNick,
+    //         content: msg.content,
+    //       })
+    //       map[msg.idClient] = true 
+    //       Object.keys(msg).forEach((item: any) => { item = null })
+    //       msg = null
+    //     }
+    //   })
+    //   // 解除引用.
+    //   map = null
+    //   return fts
+    // }
 
     async _doInsert(msgs: IMsg[]): Promise<void> {
       const that = this
@@ -827,7 +835,7 @@ const fullText = (NimSdk: any) => {
           try {
             await this.restoreDBFile()
             await this.instance.initDB()
-          } catch (err) {
+          } catch (err: any) {
             this.logger.error(`Failed to initialize database, already try to restore db， error: ${err.message}`)
             throw err
           }
