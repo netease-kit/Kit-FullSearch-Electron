@@ -467,13 +467,12 @@ const fullText = (NimSdk: any) => {
       }
 
       let msgs: any = obj.msgs
+      const length = msgs.length
+      const lastTime = msgs[length - 1].time
 
       if (msgs && msgs.length > 0) {
         this.putFts(msgs || [], true)
       }
-
-      const length = msgs.length
-      const lastTime = msgs[length - 1].time
 
       // 解除引用
       msgs = null;
