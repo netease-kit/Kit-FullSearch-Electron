@@ -458,13 +458,12 @@ const fullText = (NimSdk: any) => {
                 reject(err)
                 return
               }
-              resolve(
-                obj.msgs && obj.msgs.filter(item => item.text && item.idClient)
-                  .map(item => {
-                    item.id = item.idClient
-                    return item;
-                  })
-              )
+              const msgs = obj.msgs && obj.msgs.filter(item => item.text && item.idClient)
+                .map(item => {
+                  item._id = item.idClient
+                  return item;
+                })
+              resolve(msgs)
             },
           })
         })
@@ -645,7 +644,7 @@ const fullText = (NimSdk: any) => {
 
     async _doInsert(msgs: IMsg[]): Promise<void> {
       const that = this
-      this.logger.info(`insert data to database, length: ${msgs.length}, timetag from ${msgs[0].time} to ${msgs[msgs.length - 1].time}`)
+      this.logger.info(`insert data to database, length: ${msgs.length}, timetag from ${msgs[0].time} to ${msgs[msgs.length - 1].time}, ${JSON.stringify(msgs[0])}`)
       return new Promise((resolve, reject) => {
         const column = tableColumn.map(() => '?').join(',')
         this.searchDB.serialize(() => {

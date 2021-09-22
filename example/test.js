@@ -143,6 +143,7 @@ class Test {
       // temp.idClient = 'Tua4jkM5cdg3Knkd7Qi1TqGDuiuZfGWh'
       fts.push({
         ...temp,
+        _id: temp.idClient,
         text: txt,
       })
       objectStore.add({
