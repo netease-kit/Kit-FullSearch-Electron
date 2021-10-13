@@ -87,7 +87,7 @@ const fullText = (NimSdk: any) => {
           }
         }
       })
-      this.logger = getLogger()
+      this.logger4j = getLogger()
     }
 
     public async initDB(): Promise<void> {
@@ -99,11 +99,11 @@ const fullText = (NimSdk: any) => {
       this.searchDB = await new Promise(function (resolve, reject) {
         const db = new sqlite3.Database(finalName, function (err) {
           if (err) {
-            that.logger.info('failed to open database: ', err)
+            that.logger4j.info('failed to open database: ', err)
             reject(err)
             return
           }
-          that.logger.info('open database successfully')
+          that.logger4j.info('open database successfully')
           resolve(db)
         })
       })
@@ -135,21 +135,21 @@ const fullText = (NimSdk: any) => {
       }
 
       await new Promise((resolve, reject) => {
-        this.logger.info(`Load extension from file: ${filePath}`)
+        this.logger4j.info(`Load extension from file: ${filePath}`)
         this.searchDB.loadExtension(filePath, (err) => {
           if (err) {
-            this.logger.info(`Load extension failed ！from file: ${filePath}`)
+            this.logger4j.info(`Load extension failed ！from file: ${filePath}`)
             reject(err)
             return
           }
-          this.logger.info(`Load extension success ！from file: ${filePath}`)
+          this.logger4j.info(`Load extension success ！from file: ${filePath}`)
           resolve({})
         })
       })
     }
 
     public async loadDict(): Promise<void> {
-      this.logger.info('load dict start')
+      this.logger4j.info('load dict start')
       const resourcePath = path.resolve(
         path
           .join(__dirname)
@@ -159,7 +159,7 @@ const fullText = (NimSdk: any) => {
         .join(resourcePath, 'dict')
         .concat(process.platform === 'win32' ? '\\' : '/')
       await this.searchDB.run(`SELECT jieba_dict("${dictPath}")`)
-      this.logger.info('load dict success')
+      this.logger4j.info('load dict success')
     }
 
     public async backupDBFile(): Promise<void> {
@@ -171,9 +171,9 @@ const fullText = (NimSdk: any) => {
           fs.unlinkSync(dstFile)
         }
         fs.copyFileSync(srcFile, dstFile)
-        this.logger.info(`backup DB file from ${srcFile} to ${dstFile}`)
+        this.logger4j.info(`backup DB file from ${srcFile} to ${dstFile}`)
       } catch (err) {
-        this.logger.info(`failed to backup DB file from ${srcFile} to ${dstFile}, error: ${err}`)
+        this.logger4j.info(`failed to backup DB file from ${srcFile} to ${dstFile}, error: ${err}`)
       }
     }
 
@@ -195,9 +195,9 @@ const fullText = (NimSdk: any) => {
         fs.copyFileSync(srcFile, dstFile)
         // remove backup file
         fs.unlinkSync(srcFile)
-        this.logger.info(`restore DB file from ${srcFile} to ${dstFile}`)
+        this.logger4j.info(`restore DB file from ${srcFile} to ${dstFile}`)
       }).catch(() => {
-        this.logger.info(`failed to restore DB file.`)
+        this.logger4j.info(`failed to restore DB file.`)
       })
     }
 
@@ -206,8 +206,8 @@ const fullText = (NimSdk: any) => {
         await this.searchDB.run(`INSERT INTO nim_msglog_fts(nim_msglog_fts) VALUES('integrity-check');`)
       } catch (err) {
         this.emit('ftsDamaged', err)
-        this.logger.error(err)
-        throw new Error(err)
+        this.logger4j.error(err)
+        throw err
       }
     }
 
@@ -222,7 +222,7 @@ const fullText = (NimSdk: any) => {
 
     public async createTable(): Promise<void> {
       // simple 0 是为了禁止拼音
-      this.logger.info('create table start')
+      this.logger4j.info('create table start')
       await this.searchDB.run(`
         CREATE TABLE IF NOT EXISTS "nim_msglog" (
           "id"        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -240,7 +240,7 @@ const fullText = (NimSdk: any) => {
           "content"   TEXT
         );`
       )
-      this.logger.info('create table nim_msglog success')
+      this.logger4j.info('create table nim_msglog success')
       await this.searchDB.run(`
         CREATE VIRTUAL TABLE IF NOT EXISTS nim_msglog_fts USING fts5(
           [idClient] UNINDEXED,
@@ -258,7 +258,7 @@ const fullText = (NimSdk: any) => {
           content = [nim_msglog], content_rowid = id, tokenize = 'simple 0'
         );`
       )
-      this.logger.info('create table nim_msglog_fts success')
+      this.logger4j.info('create table nim_msglog_fts success')
       await this.searchDB.run(`
         CREATE TRIGGER IF NOT EXISTS nim_msglog_ai AFTER INSERT ON nim_msglog 
         BEGIN 
@@ -270,7 +270,7 @@ const fullText = (NimSdk: any) => {
           );
         END;`
       )
-      this.logger.info('create table nim_msglog_ai success')
+      this.logger4j.info('create table nim_msglog_ai success')
       await this.searchDB.run(`
         CREATE TRIGGER IF NOT EXISTS nim_msglog_ad AFTER DELETE ON nim_msglog
         BEGIN
@@ -283,7 +283,7 @@ const fullText = (NimSdk: any) => {
           );
         END;`
       )
-      this.logger.info('create table nim_msglog_ad success')
+      this.logger4j.info('create table nim_msglog_ad success')
       await this.searchDB.run(`
         CREATE TRIGGER IF NOT EXISTS nim_msglog_au AFTER UPDATE ON nim_msglog
         BEGIN
@@ -301,8 +301,8 @@ const fullText = (NimSdk: any) => {
           );
         END;`
       )
-      this.logger.info('create table nim_msglog_au success')
-      this.logger.info('create tables successfully')
+      this.logger4j.info('create table nim_msglog_au success')
+      this.logger4j.info('create tables successfully')
     }
 
     public sendText(opt: any): any {
@@ -512,7 +512,7 @@ const fullText = (NimSdk: any) => {
         const records = await this.searchDB.all(sql)
         return records
       } catch (error) {
-        this.logger.info('queryFts fail: ', error)
+        this.logger4j.info('queryFts fail: ', error)
         throw error
       }
     }
@@ -644,7 +644,7 @@ const fullText = (NimSdk: any) => {
 
     async _doInsert(msgs: IMsg[]): Promise<void> {
       const that = this
-      this.logger.info(`insert data to database, length: ${msgs.length}, timetag from ${msgs[0].time} to ${msgs[msgs.length - 1].time}, ${JSON.stringify(msgs[0])}`)
+      this.logger4j.info(`insert data to database, length: ${msgs.length}, timetag from ${msgs[0].time} to ${msgs[msgs.length - 1].time}, ${JSON.stringify(msgs[0])}`)
       return new Promise((resolve, reject) => {
         const column = tableColumn.map(() => '?').join(',')
         this.searchDB.serialize(() => {
@@ -680,7 +680,7 @@ const fullText = (NimSdk: any) => {
             })
           } catch (err) {
             this.searchDB.exec('ROLLBACK TRANSACTION;', function (err) {
-              that.logger.info('rollback: ', err)
+              that.logger4j.info('rollback: ', err)
             })
             reject(err)
           }
@@ -696,11 +696,11 @@ const fullText = (NimSdk: any) => {
         idsString = `"${ids}"`
       }
       try {
-        this.logger.info(`delete data from database, ids: ${idsString}`)
+        this.logger4j.info(`delete data from database, ids: ${idsString}`)
         await this.searchDB.run(`DELETE FROM nim_msglog WHERE idClient in (${idsString});`)
-        this.logger.info('deleteFts success', ids)
+        this.logger4j.info('deleteFts success', ids)
       } catch (error) {
-        this.logger.info('deleteFts fail: ', error)
+        this.logger4j.info('deleteFts fail: ', error)
         throw error
       }
     }
@@ -709,7 +709,7 @@ const fullText = (NimSdk: any) => {
       try {
         await this.searchDB.run('DELETE FROM `nim_msglog`;')
       } catch (error) {
-        this.logger.info('clearAllFts fail: ', error)
+        this.logger4j.info('clearAllFts fail: ', error)
         throw error
       }
     }
@@ -722,9 +722,9 @@ const fullText = (NimSdk: any) => {
         await this.searchDB.run('drop trigger if exists nim_msglog_ai;')
         await this.searchDB.run('drop trigger if exists nim_msglog_ad;')
         await this.createTable()
-        this.logger.info('dropAllFts success')
+        this.logger4j.info('dropAllFts success')
       } catch (error) {
-        this.logger.info('dropAllFts fail: ', error)
+        this.logger4j.info('dropAllFts fail: ', error)
         throw error
       }
     }
@@ -744,12 +744,12 @@ const fullText = (NimSdk: any) => {
         })
       })
         .then(() => {
-          this.logger.info && this.logger.info('close searchDB success')
+          this.logger4j.info && this.logger4j.info('close searchDB success')
           FullTextNim.instance = null
           super.destroy(options)
         })
         .catch((error) => {
-          this.logger.info && this.logger.info('close searchDB fail: ', error)
+          this.logger4j.info && this.logger4j.info('close searchDB fail: ', error)
           FullTextNim.instance = null
           super.destroy(options)
         })
@@ -814,7 +814,7 @@ const fullText = (NimSdk: any) => {
 
       const whereSQL = where.length > 0 ? `where ${where.join(' AND ')}` : ''
       const sql = `SELECT \`idClient\`, ${column} from nim_msglog_fts ${whereSQL} ${order} ${limitQuery}`
-      this.logger.info('_handleQueryParams: ', sql)
+      this.logger4j.info('_handleQueryParams: ', sql)
       return sql
     }
 
@@ -825,8 +825,8 @@ const fullText = (NimSdk: any) => {
         try {
           await this.instance.initDB()
           console.log(`Init DB successfully`)
-        } catch (err) {
-          console.error(`Failed to initialize database, error: ${err.message}`)
+        } catch (err: any) {
+          console.error(`Failed to initialize database, error: ${err && err.message}`)
           error = err
         }
         // 如果 initdb 出错了，那么尝试从备份恢复，然后在重新打开 db，最后实在恢复不动则抛出错误给上层
@@ -835,7 +835,7 @@ const fullText = (NimSdk: any) => {
             await this.restoreDBFile()
             await this.instance.initDB()
           } catch (err: any) {
-            this.logger.error(`Failed to initialize database, already try to restore db， error: ${err.message}`)
+            this.logger4j.error(`Failed to initialize database, already try to restore db， error: ${err.message}`)
             throw err
           }
         }
