@@ -459,10 +459,6 @@ const fullText = (NimSdk: any) => {
                 return
               }
               const msgs = obj.msgs && obj.msgs.filter(item => item.text && item.idClient)
-                .map(item => {
-                  item._id = item.idClient
-                  return item;
-                })
               resolve(msgs)
             },
           })
@@ -652,7 +648,7 @@ const fullText = (NimSdk: any) => {
             this.searchDB.exec('BEGIN TRANSACTION;')
             msgs.forEach((msg: any) => {
               this.searchDB.run(`INSERT OR IGNORE INTO \`nim_msglog\` VALUES(NULL,${column});`, [
-                msg._id,
+                msg.idClient,
                 msg.text,
                 msg.sessionId,
                 msg.from,
