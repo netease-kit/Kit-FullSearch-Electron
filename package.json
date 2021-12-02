@@ -21,7 +21,8 @@
   "scripts": {
     "install": "just install",
     "build": "npx tsc",
-    "p": "npm run build && npm publish"
+    "sync-packet": "curl https://npm.taobao.org/sync/kit-fullsearch-electron",
+    "p": "npm run build && npm publish && npm run sync-packet"
   },
   "repository": {
     "type": "git",
