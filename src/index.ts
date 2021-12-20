@@ -836,45 +836,47 @@ const fullText = (NimSdk: any) => {
           }
         }
       }
-      return NimSdk.getInstance({
-        ...initOpt,
-        onroamingmsgs: (obj, ...rest) => {
-          obj && obj.msgs && this.instance?.putFts(obj.msgs)
-          initOpt.onroamingmsgs && initOpt.onroamingmsgs(obj, ...rest)
-        },
-        onofflinemsgs: (obj, ...rest) => {
-          obj && obj.msgs && this.instance?.putFts(obj.msgs)
-          initOpt.onofflinemsgs && initOpt.onofflinemsgs(obj, ...rest)
-        },
-        onmsg: (...args: any) => {
-          this.instance?.putFts(args[0])
-          initOpt.onmsg && initOpt.onmsg(...args)
-        },
-        onDeleteMsgSelf: (...args: any) => {
-          // 删除 fts
-          const msgs = args[0]
-          const ids = msgs && msgs.map((msg) => msg.idClient)
-          if (ids) {
-            this.instance?.deleteFts(ids)
-          }
-          initOpt.onDeleteMsgSelf && initOpt.onDeleteMsgSelf(...args)
-        },
-        onsysmsg: (obj, ...rest) => {
-          // 撤回
-          if (obj && obj.type === 'deleteMsg') {
-            this.instance?.deleteFts(obj.deletedIdClient)
-          }
-          initOpt.onsysmsg && initOpt.onsysmsg(obj, ...rest)
-        },
-        onofflinesysmsgs: (obj, ...rest) => {
-          const ids =
-            obj &&
-            obj.map((msg) => msg.type === 'deleteMsg' && msg.deletedIdClient)
-          if (ids) {
-            this.instance?.deleteFts(ids)
-          }
-          initOpt.onofflinesysmsgs && initOpt.onofflinesysmsgs(obj, ...rest)
-        },
+      return Promise.resolve().then(() => {
+        return NimSdk.getInstance({
+          ...initOpt,
+          onroamingmsgs: (obj, ...rest) => {
+            obj && obj.msgs && this.instance?.putFts(obj.msgs)
+            initOpt.onroamingmsgs && initOpt.onroamingmsgs(obj, ...rest)
+          },
+          onofflinemsgs: (obj, ...rest) => {
+            obj && obj.msgs && this.instance?.putFts(obj.msgs)
+            initOpt.onofflinemsgs && initOpt.onofflinemsgs(obj, ...rest)
+          },
+          onmsg: (...args: any) => {
+            this.instance?.putFts(args[0])
+            initOpt.onmsg && initOpt.onmsg(...args)
+          },
+          onDeleteMsgSelf: (...args: any) => {
+            // 删除 fts
+            const msgs = args[0]
+            const ids = msgs && msgs.map((msg) => msg.idClient)
+            if (ids) {
+              this.instance?.deleteFts(ids)
+            }
+            initOpt.onDeleteMsgSelf && initOpt.onDeleteMsgSelf(...args)
+          },
+          onsysmsg: (obj, ...rest) => {
+            // 撤回
+            if (obj && obj.type === 'deleteMsg') {
+              this.instance?.deleteFts(obj.deletedIdClient)
+            }
+            initOpt.onsysmsg && initOpt.onsysmsg(obj, ...rest)
+          },
+          onofflinesysmsgs: (obj, ...rest) => {
+            const ids =
+              obj &&
+              obj.map((msg) => msg.type === 'deleteMsg' && msg.deletedIdClient)
+            if (ids) {
+              this.instance?.deleteFts(ids)
+            }
+            initOpt.onofflinesysmsgs && initOpt.onofflinesysmsgs(obj, ...rest)
+          },
+        })
       })
     }
   }

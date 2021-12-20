@@ -2,16 +2,15 @@ const fullText = require('kit-fullsearch-electron').default
 const SDK = require('./sdk/NIM_Web_SDK_v8.5.1_test')
 const Test = require('./test')
 const NIM = fullText(SDK.NIM)
-const TAG_NAME = 'renderer.js'
 
 function doLog(err, obj) {
-  console.log(TAG_NAME, 'receive: ', err, obj)
+  console.log('receive: ', err, obj)
 }
 
 NIM.getInstance({
   debug: false,
   appKey: 'fe416640c8e8a72734219e1847ad2547',
-  account: 'cs6',
+  account: 'cjhz1',
   token: 'e10adc3949ba59abbe56e057f20f883e',
   queryOption: 1,
   enablePinyin: false,
@@ -29,7 +28,7 @@ NIM.getInstance({
   // },
 
   onconnect(obj) {
-    console.log(TAG_NAME, '连接建立成功', obj)
+    console.log('连接建立成功', obj)
     window.test = new Test()
     // if (loginInfo) {
     // 连接上以后更新uid
@@ -39,11 +38,11 @@ NIM.getInstance({
   onerror() {
     // console.log(JSON.stringify(event))
     // debugger
-    console.error(TAG_NAME, 'error')
+    console.error('error')
     // location.href = config.loginUrl
   },
   onwillreconnect(obj) {
-    console.log(TAG_NAME, obj)
+    console.log(obj)
   },
   ondisconnect: function onDisconnect(error) {
     let map = {
@@ -59,14 +58,14 @@ NIM.getInstance({
     switch (error.code) {
       // 账号或者密码错误, 请跳转到登录页面并提示错误
       case 302:
-        console.log(TAG_NAME, '帐号或密码错误')
+        console.log('帐号或密码错误')
         break
       // 被踢, 请提示错误后跳转到登录页面
       case 'kicked':
-        console.log(TAG_NAME, '被踢')
+        console.log('被踢')
         break
       default:
-        console.error(TAG_NAME, error)
+        console.error(error)
         break
     }
   },
@@ -111,14 +110,22 @@ NIM.getInstance({
   onUpdateSuperTeamMembersMute: doLog,
 
   /* 会话 */
-  onsessions: doLog,
+  onsessions: function (sessions) {
+    console.log('!!!! onsessions', sessions)
+  },
   onupdatesession: doLog,
 
   /* 消息 */
   /* 已下三个函数会自动同步到searchDB */
-  onroamingmsgs: function (obj) { },
-  onofflinemsgs: function (obj) { },
-  onmsg: function (obj) { },
+  onroamingmsgs: function (obj) {
+    console.log('!!!!! onroamingmsgs', obj, nim)
+  },
+  onofflinemsgs: function (obj) {
+    console.log('!!!!! onroamingmsgs', obj, nim)
+  },
+  onmsg: function (obj) {
+    
+  },
 
   /* 系统通知 */
   onsysmsg: doLog,
@@ -130,15 +137,16 @@ NIM.getInstance({
   oncustomsysmsg: doLog,
 
   onStickTopSessions: function (session) {
-    console.log(TAG_NAME, '收到置顶会话列表', session)
+    console.log('收到置顶会话列表', session)
   },
 
   /* 同步完成 */
   onsyncdone: function onSyncDone() {
     // store.commit('setLoading', false)
-    console.log(TAG_NAME, 'onsyncdone')
+    console.log('onsyncdone')
   },
 }).then((nim) => {
+  console.log('!!!!! await', nim)
   window.nim = nim
   nim.on('ftsDamaged', function (err) {
     console.log('数据库已经损毁，请调用 rebuildDbIndex 修复', err)
