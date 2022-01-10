@@ -143,6 +143,7 @@ class Test {
       // temp.idClient = 'Tua4jkM5cdg3Knkd7Qi1TqGDuiuZfGWh'
       fts.push({
         ...temp,
+        _id: temp.idClient,
         text: txt,
       })
       objectStore.add({
@@ -206,10 +207,10 @@ class Test {
       //   ...temp,
       //   text: txt,
       // });
-      console.log('插入了', {
-        ...temp,
-        text: txt,
-      })
+      // console.log('插入了', {
+      //   ...temp,
+      //   text: txt,
+      // })
       objectStore.add({
         ...temp,
         text: txt,

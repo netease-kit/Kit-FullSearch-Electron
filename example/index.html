@@ -31,7 +31,7 @@
       <span>关键字</span>
       <input id="q-keyword" type="text" placeholder="关键字" />
       <span>分词逻辑</span>
-      <input id="q-option" type="number" placeholder="分词逻辑" />
+      <input id="q-option" type="number" min="0" max="5" placeholder="分词逻辑" value="0" />
     </div>
     <div>
       <span>sessionIds</span>
@@ -70,7 +70,7 @@
     <div>
       <div>
         <h3>同步indexDB到search-index</h3>
-        <button class="j-write-indexdb">只往 indexDB 写入 50000 条（20年到21年7月间）</button>
+        <button class="j-write-indexdb">只往 indexDB 写入 100000 条（20年到21年7月间）</button>
         <button class="j-write-indexdb-ascii">只往 indexDB 写入 1 条 ascii 字符（ 127 个字符）</button>
         <button class="j-sync">同步最近两年</button>
         <button class="j-syncall">同步所有</button>

@@ -67,7 +67,7 @@ class LogDebug {
   }
 }
 
-export const logger = new LogDebug({
+export const logger4j = new LogDebug({
   appName: packageJson.name,
   version: packageJson.version,
   debug: true,
