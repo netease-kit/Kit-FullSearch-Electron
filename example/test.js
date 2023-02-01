@@ -64,6 +64,7 @@ class Test {
 
     this.request.onupgradeneeded = (event) => {
       this.db = event.target.result
+      const db = this.db
       let objectStore
       console.log(TAG_NAME, 'onupgradeneeded：', db.objectStoreNames)
       if (!db.objectStoreNames.contains('msg1')) {
