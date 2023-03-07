@@ -64,6 +64,7 @@ class Test {
 
     this.request.onupgradeneeded = (event) => {
       this.db = event.target.result
+      const db = this.db
       let objectStore
       console.log(TAG_NAME, 'onupgradeneeded：', db.objectStoreNames)
       if (!db.objectStoreNames.contains('msg1')) {
@@ -143,6 +144,7 @@ class Test {
       // temp.idClient = 'Tua4jkM5cdg3Knkd7Qi1TqGDuiuZfGWh'
       fts.push({
         ...temp,
+        _id: temp.idClient,
         text: txt,
       })
       objectStore.add({
@@ -206,10 +208,10 @@ class Test {
       //   ...temp,
       //   text: txt,
       // });
-      console.log('插入了', {
-        ...temp,
-        text: txt,
-      })
+      // console.log('插入了', {
+      //   ...temp,
+      //   text: txt,
+      // })
       objectStore.add({
         ...temp,
         text: txt,

@@ -1,6 +1,6 @@
 {
   "name": "kit-fullsearch-electron",
-  "version": "2.1.1",
+  "version": "2.2.5-beta.1",
   "description": "全文搜索组件，基于网易云信web端im sdk，用于Electron",
   "main": "lib/index.js",
   "module": "lib/index.js",
@@ -21,7 +21,8 @@
   "scripts": {
     "install": "just install",
     "build": "npx tsc",
-    "p": "npm run build && npm publish"
+    "sync-packet": "curl https://npm.taobao.org/sync/kit-fullsearch-electron",
+    "p": "npm run build && npm publish && npm run sync-packet"
   },
   "repository": {
     "type": "git",
@@ -53,6 +54,7 @@
   "dependencies": {
     "download": "^8.0.0",
     "just-scripts": "^1.5.4",
+    "log4js": "^6.3.0",
     "sqlite3": "^5.0.2"
   }
 }

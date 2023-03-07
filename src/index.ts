@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable @typescript-eslint/no-this-alias */
-import { logger } from './logger'
+import { configure, getLogger } from 'log4js'
 import { promisify, promisifyForDone } from './utils'
 import { IFullTextNim, IInitOpt, QueryOption, IQueryParams, IMsg } from './type'
 import * as path from 'path'
 import * as os from 'os'
+// import fs from 'fs'
+const fs = require('fs')
 const sqlite3 = require('sqlite3').verbose()
 
 const tableColumn = [
@@ -32,14 +34,15 @@ const fullText = (NimSdk: any) => {
     queryOption: QueryOption
     enablePinyin: boolean
     searchDB: any
-    ftLogFunc: (...args: any) => void
+    // ftLogFunc: (...args: any) => void
     // ignoreChars: string
     searchDBName: string
     searchDBPath: string
     fullSearchCutFunc?: (text: string) => string[]
     msgStockQueue: any[]
     msgQueue: any[]
-    timeout: number
+    timeout: any
+    logger: any
 
     constructor(initOpt: IInitOpt) {
       super(initOpt)
@@ -52,24 +55,10 @@ const fullText = (NimSdk: any) => {
         searchDBName,
         searchDBPath,
         debug,
-        ftLogFunc,
-        fullSearchCutFunc,
+        // ftLogFunc,
+        // fullSearchCutFunc,
       } = initOpt
-
-      // 初始化logger
-      if (debug) {
-        this.ftLogFunc = logger.log.bind(logger)
-      } else {
-        this.ftLogFunc = (): void => {
-          // i'm empty
-        }
-      }
-      if (ftLogFunc) {
-        this.ftLogFunc = ftLogFunc
-      }
-
       if (!account || !appKey) {
-        this.ftLogFunc('invalid init params!')
         throw new Error('invalid init params!')
       }
       this.queryOption = queryOption || QueryOption.kDefault
@@ -79,9 +68,26 @@ const fullText = (NimSdk: any) => {
       this.msgQueue = []
       this.msgStockQueue = []
       this.timeout = 0
-      if (fullSearchCutFunc) {
-        this.fullSearchCutFunc = fullSearchCutFunc
-      }
+      
+      // 初始化logger
+      configure({
+        appenders: {
+          ftsLog: {
+            type: 'file',
+            filename: path.join(this.searchDBPath, this.searchDBName + '.log')
+          },
+          console: {
+            type: 'console'
+          }
+        },
+        categories: {
+          default: {
+            appenders: debug ? ['ftsLog', 'console'] : ['ftsLog'],
+            level: "ALL"
+          }
+        }
+      })
+      this.logger4j = getLogger()
     }
 
     public async initDB(): Promise<void> {
@@ -89,14 +95,15 @@ const fullText = (NimSdk: any) => {
         ? path.join(this.searchDBPath, `${this.searchDBName}.sqlite`)
         : `${this.searchDBName}.sqlite`
       const that = this
+
       this.searchDB = await new Promise(function (resolve, reject) {
         const db = new sqlite3.Database(finalName, function (err) {
           if (err) {
-            that.ftLogFunc('initDB fail: ', err)
+            that.logger4j.info('failed to open database: ', err)
             reject(err)
             return
           }
-          that.ftLogFunc('initDB success')
+          that.logger4j.info('open database successfully')
           resolve(db)
         })
       })
@@ -106,8 +113,7 @@ const fullText = (NimSdk: any) => {
       await this.loadExtension()
       await this.createTable()
       await this.loadDict()
-
-      // 检查 db，异步检查即可
+      await this.backupDBFile()
       this.checkDbSafe()
     }
 
@@ -127,31 +133,72 @@ const fullText = (NimSdk: any) => {
             .replace(/^(.+)asar(.node_modules.+)$/, '$1asar.unpacked$2')
         )
       }
+
       await new Promise((resolve, reject) => {
-        this.searchDB.loadExtension(filePath, function (err) {
+        this.logger4j.info(`Load extension from file: ${filePath}`)
+        this.searchDB.loadExtension(filePath, (err) => {
           if (err) {
+            this.logger4j.info(`Load extension failed ！from file: ${filePath}`)
             reject(err)
             return
           }
+          this.logger4j.info(`Load extension success ！from file: ${filePath}`)
           resolve({})
         })
       })
     }
 
     public async loadDict(): Promise<void> {
+      this.logger4j.info('load dict start')
+      const resourcePath = path.resolve(
+        path
+          .join(__dirname)
+          .replace(/^(.+)asar(.node_modules.+)$/, '$1asar.unpacked$2')
+      )
+      const dictPath = path
+        .join(resourcePath, 'dict')
+        .concat(process.platform === 'win32' ? '\\' : '/')
+      await this.searchDB.run(`SELECT jieba_dict("${dictPath}")`)
+      this.logger4j.info('load dict success')
+    }
+
+    public async backupDBFile(): Promise<void> {
+      const srcFile = path.join(this.searchDBPath, `${this.searchDBName}.sqlite`)
+      const dstFile = path.join(this.searchDBPath, `${this.searchDBName}.sqlite.backup`)
       try {
-        const resourcePath = path.resolve(
-          path
-            .join(__dirname)
-            .replace(/^(.+)asar(.node_modules.+)$/, '$1asar.unpacked$2')
-        )
-        const dictPath = path
-          .join(resourcePath, 'dict')
-          .concat(process.platform === 'win32' ? '\\' : '/')
-        await this.searchDB.run(`SELECT jieba_dict("${dictPath}")`)
+        // remove exists backup DB file
+        if (fs.existsSync(dstFile)) {
+          fs.unlinkSync(dstFile)
+        }
+        fs.copyFileSync(srcFile, dstFile)
+        this.logger4j.info(`backup DB file from ${srcFile} to ${dstFile}`)
       } catch (err) {
-        this.ftLogFunc('failed to load jieba dict: ', err)
+        this.logger4j.info(`failed to backup DB file from ${srcFile} to ${dstFile}, error: ${err}`)
       }
+    }
+
+    public async restoreDBFile(): Promise<void> {
+      const srcFile = path.join(this.searchDBPath, `${this.searchDBName}.sqlite.backup`)
+      const dstFile = path.join(this.searchDBPath, `${this.searchDBName}.sqlite`)
+      return new Promise((resolve, reject) => {
+        this.searchDB.close((err) => {
+          if (err) {
+            reject(err)
+          } else {
+            resolve({})
+          }
+        })
+      }).then(() => {
+        if (fs.existsSync(dstFile)) {
+          fs.unlinkSync(dstFile)
+        }
+        fs.copyFileSync(srcFile, dstFile)
+        // remove backup file
+        fs.unlinkSync(srcFile)
+        this.logger4j.info(`restore DB file from ${srcFile} to ${dstFile}`)
+      }).catch(() => {
+        this.logger4j.info(`failed to restore DB file.`)
+      })
     }
 
     public async checkDbSafe(): Promise<void> {
@@ -159,6 +206,8 @@ const fullText = (NimSdk: any) => {
         await this.searchDB.run(`INSERT INTO nim_msglog_fts(nim_msglog_fts) VALUES('integrity-check');`)
       } catch (err) {
         this.emit('ftsDamaged', err)
+        this.logger4j.error(err)
+        throw err
       }
     }
 
@@ -172,86 +221,88 @@ const fullText = (NimSdk: any) => {
     }
 
     public async createTable(): Promise<void> {
-      try {
-        // simple 0 是为了禁止拼音
-        await this.searchDB.run(`
-          CREATE TABLE IF NOT EXISTS "nim_msglog" (
-            "id"        INTEGER PRIMARY KEY AUTOINCREMENT,
-            "idClient"  TEXT NOT NULL UNIQUE,
-            "text"      TEXT,
-            "sessionId" TEXT NOT NULL,
-            "from"      TEXT NOT NULL,
-            "time"      INTEGER NOT NULL,
-            "target"    TEXT NOT NULL,
-            "to"        TEXT NOT NULL,
-            "type"      TEXT,
-            "scene"     TEXT,
-            "idServer"  TEXT NOT NULL,
-            "fromNick"  TEXT,
-            "content"   TEXT
-          );`
-        )
-        await this.searchDB.run(`
-          CREATE VIRTUAL TABLE IF NOT EXISTS nim_msglog_fts USING fts5(
-            [idClient] UNINDEXED,
-            [text],
-            [sessionId] UNINDEXED,
-            [from] UNINDEXED,
-            [time] UNINDEXED,
-            [target] UNINDEXED,
-            [to] UNINDEXED,
-            [type] UNINDEXED,
-            [scene] UNINDEXED,
-            [idServer] UNINDEXED,
-            [fromNick] UNINDEXED,
-            [content] UNINDEXED,
-            content = [nim_msglog], content_rowid = id, tokenize = 'simple 0'
-          );`
-        )
-        await this.searchDB.run(`
-          CREATE TRIGGER IF NOT EXISTS nim_msglog_ai AFTER INSERT ON nim_msglog 
-          BEGIN 
-            INSERT INTO nim_msglog_fts (
-              rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
-            ) VALUES (
-              new.id,new.idClient,new.text,new.sessionId,new.[from],new.time,new.target,
-              new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
-            );
-          END;`
-        )
-        await this.searchDB.run(`
-          CREATE TRIGGER IF NOT EXISTS nim_msglog_ad AFTER DELETE ON nim_msglog
-          BEGIN
-            INSERT INTO nim_msglog_fts (
-              nim_msglog_fts,rowid,idClient,text,sessionId,[from],
-              time,target,[to],type,scene,idServer,fromNick,content
-            ) VALUES (
-              'delete',old.id,old.idClient,old.text,old.sessionId,old.[from],old.time,old.target,
-              old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
-            );
-          END;`
-        )
-        await this.searchDB.run(`
-          CREATE TRIGGER IF NOT EXISTS nim_msglog_au AFTER UPDATE ON nim_msglog
-          BEGIN
-            INSERT INTO nim_msglog_fts (
-              nim_msglog_fts,rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
-            ) VALUES (
-              'delete',old.id,old.idClient,old.text,old.sessionId,old.[from],old.time,
-              old.target,old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
-            );
-            INSERT INTO nim_msglog_fts (
-              rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
-            ) VALUES (
-              new.id,new.idClient,new.text,new.sessionId,new.[from],
-              new.time,new.target,new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
-            );
-          END;`
-        )
-      } catch (err) {
-        this.ftLogFunc('create VIRTUAL table failed: ', err)
-        this.emit('ftsError', err)
-      }
+      // simple 0 是为了禁止拼音
+      this.logger4j.info('create table start')
+      await this.searchDB.run(`
+        CREATE TABLE IF NOT EXISTS "nim_msglog" (
+          "id"        INTEGER PRIMARY KEY AUTOINCREMENT,
+          "idClient"  TEXT NOT NULL UNIQUE,
+          "text"      TEXT,
+          "sessionId" TEXT NOT NULL,
+          "from"      TEXT NOT NULL,
+          "time"      INTEGER NOT NULL,
+          "target"    TEXT NOT NULL,
+          "to"        TEXT NOT NULL,
+          "type"      TEXT,
+          "scene"     TEXT,
+          "idServer"  TEXT NOT NULL,
+          "fromNick"  TEXT,
+          "content"   TEXT
+        );`
+      )
+      this.logger4j.info('create table nim_msglog success')
+      await this.searchDB.run(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS nim_msglog_fts USING fts5(
+          [idClient] UNINDEXED,
+          [text],
+          [sessionId] UNINDEXED,
+          [from] UNINDEXED,
+          [time] UNINDEXED,
+          [target] UNINDEXED,
+          [to] UNINDEXED,
+          [type] UNINDEXED,
+          [scene] UNINDEXED,
+          [idServer] UNINDEXED,
+          [fromNick] UNINDEXED,
+          [content] UNINDEXED,
+          content = [nim_msglog], content_rowid = id, tokenize = 'simple 0'
+        );`
+      )
+      this.logger4j.info('create table nim_msglog_fts success')
+      await this.searchDB.run(`
+        CREATE TRIGGER IF NOT EXISTS nim_msglog_ai AFTER INSERT ON nim_msglog 
+        BEGIN 
+          INSERT INTO nim_msglog_fts (
+            rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+          ) VALUES (
+            new.id,new.idClient,new.text,new.sessionId,new.[from],new.time,new.target,
+            new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
+          );
+        END;`
+      )
+      this.logger4j.info('create table nim_msglog_ai success')
+      await this.searchDB.run(`
+        CREATE TRIGGER IF NOT EXISTS nim_msglog_ad AFTER DELETE ON nim_msglog
+        BEGIN
+          INSERT INTO nim_msglog_fts (
+            nim_msglog_fts,rowid,idClient,text,sessionId,[from],
+            time,target,[to],type,scene,idServer,fromNick,content
+          ) VALUES (
+            'delete',old.id,old.idClient,old.text,old.sessionId,old.[from],old.time,old.target,
+            old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
+          );
+        END;`
+      )
+      this.logger4j.info('create table nim_msglog_ad success')
+      await this.searchDB.run(`
+        CREATE TRIGGER IF NOT EXISTS nim_msglog_au AFTER UPDATE ON nim_msglog
+        BEGIN
+          INSERT INTO nim_msglog_fts (
+            nim_msglog_fts,rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+          ) VALUES (
+            'delete',old.id,old.idClient,old.text,old.sessionId,old.[from],old.time,
+            old.target,old.[to],old.type,old.scene,old.idServer,old.fromNick,old.content
+          );
+          INSERT INTO nim_msglog_fts (
+            rowid,idClient,text,sessionId,[from],time,target,[to],type,scene,idServer,fromNick,content
+          ) VALUES (
+            new.id,new.idClient,new.text,new.sessionId,new.[from],
+            new.time,new.target,new.[to],new.type,new.scene,new.idServer,new.fromNick,new.content
+          );
+        END;`
+      )
+      this.logger4j.info('create table nim_msglog_au success')
+      this.logger4j.info('create tables successfully')
     }
 
     public sendText(opt: any): any {
@@ -397,9 +448,9 @@ const fullText = (NimSdk: any) => {
     }
 
     public async getLocalMsgsToFts(opt: any): Promise<any> {
-      let obj
+      let msgs
       try {
-        obj = await new Promise((resolve, reject) => {
+        msgs = await new Promise((resolve, reject) => {
           super.getLocalMsgs({
             ...opt,
             done: (err: any, obj: any) => {
@@ -407,7 +458,8 @@ const fullText = (NimSdk: any) => {
                 reject(err)
                 return
               }
-              resolve(obj)
+              const msgs = obj.msgs && obj.msgs.filter(item => item.text && item.idClient)
+              resolve(msgs)
             },
           })
         })
@@ -415,13 +467,21 @@ const fullText = (NimSdk: any) => {
         opt.done && opt.done(err, null)
       }
 
-      const msgs: IMsg[] = obj.msgs
+      // let msgs: any = obj.msgs
+      const length = msgs.length
+      const lastTime = length > 0 ? msgs[length - 1].time : undefined
 
       if (msgs && msgs.length > 0) {
         this.putFts(msgs || [], true)
       }
 
-      opt.done && opt.done(null, obj)
+      // 解除引用
+      msgs = null;
+
+      opt.done && opt.done(null, {
+        length,
+        lastTime
+      })
     }
 
     public async queryFts(params: IQueryParams): Promise<any> {
@@ -448,7 +508,7 @@ const fullText = (NimSdk: any) => {
         const records = await this.searchDB.all(sql)
         return records
       } catch (error) {
-        this.ftLogFunc('queryFts fail: ', error)
+        this.logger4j.info('queryFts fail: ', error)
         throw error
       }
     }
@@ -462,11 +522,12 @@ const fullText = (NimSdk: any) => {
       } else {
         this.msgQueue = this.msgQueue.concat(msgs)
       }
+
+      // @ts-ignore
+      msgs = null
       // 设置定时器，开始同步
       if (!this.timeout) {
-        this.timeout = (setTimeout(() => {
-          this._putFts(isStock)
-        }, 0) as unknown) as number
+        this.timeout = setTimeout(this._putFts.bind(this, isStock), 0)
       }
     }
 
@@ -475,15 +536,23 @@ const fullText = (NimSdk: any) => {
       if (!this.msgQueue) {
         return
       }
-      const msgs = isStock
+      let msgs: any = isStock
         ? this.msgStockQueue.splice(0, 3000)
         : this.msgQueue.splice(0, 3000)
 
       // const { inserts, updates } = await this._getMsgsWithInsertAndUpdate(msgs)
-      const fts = await this._getMsgsWithInsertAndUpdate(msgs)
+      // let fts: any = await this._getMsgsWithInsertAndUpdate(msgs)
+      let fts: any = msgs
+      // 解除引用
+      msgs = null
+      const ftsLength = fts.length
+      const ftsLastTime = fts[fts.length - 1].time
+      
 
       if (fts.length > 0) {
         await this._doInsert(fts)
+        // 解除引用
+        fts = null
         // 当 msgQueue 为 null 或者 undefined 时，当作实例已经销毁，此定时触发的任务直接作废
         if (!this.msgQueue) {
           return
@@ -491,69 +560,95 @@ const fullText = (NimSdk: any) => {
         isStock
           ? this.emit(
             'ftsStockUpsert',
-            fts.length,
+            ftsLength,
             this.msgQueue.length,
             this.msgStockQueue.length,
-            fts[fts.length - 1].time
+            ftsLastTime
           )
-          : this.emit('ftsUpsert', fts.length, this.msgQueue.length)
+          : this.emit('ftsUpsert', ftsLength, this.msgQueue.length)
+      }
+
+      if (this.msgStockQueue.length === 0 && this.msgQueue.length === 0) {
+        // clearTimeout(this.timeout)
+        this.timeout = 0
+        return
       }
 
       // 队列里还存在未同步的，那么继续定时执行
-      if (this.msgStockQueue.length > 0) {
-        this.timeout = (setTimeout(() => {
-          this._putFts(true)
-        }, 100) as unknown) as number
-      } else if (this.msgQueue.length > 0) {
-        this.timeout = (setTimeout(() => {
-          this._putFts()
-        }, 100) as unknown) as number
-      } else {
-        this.timeout = 0
-      }
+      this.timeout = this.msgStockQueue.length > 0 ?
+        setTimeout(this._putFts.bind(this, true), 0) :
+        setTimeout(this._putFts.bind(this), 0)
+      
 
     }
 
-    async _getMsgsWithInsertAndUpdate(msgs: IMsg[]): Promise<IMsg[]> {
-      // 去重
-      const map = msgs.reduce((total, next) => {
-        if (next.idClient) {
-          total[next.idClient] = next
-        }
-        return total
-      }, {})
-      msgs = Object.keys(map).map((key) => map[key])
-      const fts = msgs
-        .filter((msg) => msg.text && msg.idClient)
-        .map((msg) => {
-          return {
-            _id: msg.idClient,
-            text: msg.text,
-            sessionId: msg.sessionId,
-            from: msg.from,
-            time: msg.time,
-            target: msg.target,
-            to: msg.to,
-            type: msg.type,
-            scene: msg.scene,
-            idServer: msg.idServer,
-            fromNick: msg.fromNick,
-            content: msg.content,
-          }
-        })
-      return fts
-    }
+    // async _getMsgsWithInsertAndUpdate(msgs: IMsg[]): Promise<IMsg[]> {
+    //   // 去重
+    //   // const map = msgs.reduce((total, next) => {
+    //   //   if (next.idClient) {
+    //   //     total[next.idClient] = next
+    //   //   }
+    //   //   return total
+    //   // }, {})
+    //   // msgs = Object.keys(map).map((key) => map[key])
+    //   // const fts = msgs
+    //   //   .filter((msg) => msg.text && msg.idClient)
+    //   //   .map((msg) => {
+    //   //     return {
+    //   //       _id: msg.idClient,
+    //   //       text: msg.text,
+    //   //       sessionId: msg.sessionId,
+    //   //       from: msg.from,
+    //   //       time: msg.time,
+    //   //       target: msg.target,
+    //   //       to: msg.to,
+    //   //       type: msg.type,
+    //   //       scene: msg.scene,
+    //   //       idServer: msg.idServer,
+    //   //       fromNick: msg.fromNick,
+    //   //       content: msg.content,
+    //   //     }
+    //   //   })
+    //   let map: any = {}
+    //   const fts: IMsg[] = [];
+    //   msgs.forEach((msg: any) => {
+    //     // text 内容存在，idClient 存在，在去重的 map 中找不到已经存在过的
+    //     if (msg && msg.text && msg.idClient && !map[msg.idClient]) {
+    //       fts.push({
+    //         _id: msg.idClient,
+    //         text: msg.text,
+    //         sessionId: msg.sessionId,
+    //         from: msg.from,
+    //         time: msg.time,
+    //         target: msg.target,
+    //         to: msg.to,
+    //         type: msg.type,
+    //         scene: msg.scene,
+    //         idServer: msg.idServer,
+    //         fromNick: msg.fromNick,
+    //         content: msg.content,
+    //       })
+    //       map[msg.idClient] = true 
+    //       Object.keys(msg).forEach((item: any) => { item = null })
+    //       msg = null
+    //     }
+    //   })
+    //   // 解除引用.
+    //   map = null
+    //   return fts
+    // }
 
     async _doInsert(msgs: IMsg[]): Promise<void> {
       const that = this
+      this.logger4j.info(`insert data to database, length: ${msgs.length}, timetag from ${msgs[0].time} to ${msgs[msgs.length - 1].time}, ${JSON.stringify(msgs[0])}`)
       return new Promise((resolve, reject) => {
         const column = tableColumn.map(() => '?').join(',')
-        this.searchDB.serialize(async () => {
+        this.searchDB.serialize(() => {
           try {
             this.searchDB.exec('BEGIN TRANSACTION;')
-            msgs.forEach((msg) => {
+            msgs.forEach((msg: any) => {
               this.searchDB.run(`INSERT OR IGNORE INTO \`nim_msglog\` VALUES(NULL,${column});`, [
-                msg._id,
+                msg.idClient,
                 msg.text,
                 msg.sessionId,
                 msg.from,
@@ -566,7 +661,10 @@ const fullText = (NimSdk: any) => {
                 msg.fromNick,
                 msg.content
               ])
-              // .catch((err) => { that.emit('ftsError', err) })
+              .catch((err) => { that.emit('ftsError', err) })
+
+              Object.keys(msg).forEach((item: any) => { item = null })
+              msg = null
             })
             this.searchDB.exec('COMMIT;', function (err) {
               if (err) {
@@ -578,7 +676,7 @@ const fullText = (NimSdk: any) => {
             })
           } catch (err) {
             this.searchDB.exec('ROLLBACK TRANSACTION;', function (err) {
-              that.ftLogFunc('rollback: ', err)
+              that.logger4j.info('rollback: ', err)
             })
             reject(err)
           }
@@ -594,11 +692,11 @@ const fullText = (NimSdk: any) => {
         idsString = `"${ids}"`
       }
       try {
-        // await this.searchDB.DELETE(ids)
+        this.logger4j.info(`delete data from database, ids: ${idsString}`)
         await this.searchDB.run(`DELETE FROM nim_msglog WHERE idClient in (${idsString});`)
-        this.ftLogFunc('deleteFts success', ids)
+        this.logger4j.info('deleteFts success', ids)
       } catch (error) {
-        this.ftLogFunc('deleteFts fail: ', error)
+        this.logger4j.info('deleteFts fail: ', error)
         throw error
       }
     }
@@ -607,7 +705,7 @@ const fullText = (NimSdk: any) => {
       try {
         await this.searchDB.run('DELETE FROM `nim_msglog`;')
       } catch (error) {
-        this.ftLogFunc('clearAllFts fail: ', error)
+        this.logger4j.info('clearAllFts fail: ', error)
         throw error
       }
     }
@@ -620,9 +718,9 @@ const fullText = (NimSdk: any) => {
         await this.searchDB.run('drop trigger if exists nim_msglog_ai;')
         await this.searchDB.run('drop trigger if exists nim_msglog_ad;')
         await this.createTable()
-        this.ftLogFunc('dropAllFts success')
+        this.logger4j.info('dropAllFts success')
       } catch (error) {
-        this.ftLogFunc('dropAllFts fail: ', error)
+        this.logger4j.info('dropAllFts fail: ', error)
         throw error
       }
     }
@@ -642,12 +740,12 @@ const fullText = (NimSdk: any) => {
         })
       })
         .then(() => {
-          this.ftLogFunc && this.ftLogFunc('close searchDB success')
+          this.logger4j.info && this.logger4j.info('close searchDB success')
           FullTextNim.instance = null
           super.destroy(options)
         })
         .catch((error) => {
-          this.ftLogFunc && this.ftLogFunc('close searchDB fail: ', error)
+          this.logger4j.info && this.logger4j.info('close searchDB fail: ', error)
           FullTextNim.instance = null
           super.destroy(options)
         })
@@ -667,10 +765,17 @@ const fullText = (NimSdk: any) => {
     }: IQueryParams): string {
       const where: string[] = []
       if (text) {
+        const matchRegex = new RegExp(/^[0-9a-zA-Z]+$/)
         const queryText = this.formatSQLText(text)
-        where.push(
-          `\`text\` MATCH query('${queryText}', ${queryOption}, ${this.enablePinyin})`
-        )
+        if (matchRegex.test(text)) {
+          where.push(
+            `\`text\` GLOB '*${text}*'`
+          )
+        } else {
+          where.push(
+            `\`text\` MATCH query('${queryText}', ${queryOption}, ${this.enablePinyin})`
+          )
+        }
       }
       if (sessionIds && sessionIds.length > 0) {
         const temp = sessionIds.map((id: string) => `'${id}'`).join(',')
@@ -705,58 +810,73 @@ const fullText = (NimSdk: any) => {
 
       const whereSQL = where.length > 0 ? `where ${where.join(' AND ')}` : ''
       const sql = `SELECT \`idClient\`, ${column} from nim_msglog_fts ${whereSQL} ${order} ${limitQuery}`
-      this.ftLogFunc('_handleQueryParams: ', sql)
+      this.logger4j.info('_handleQueryParams: ', sql)
       return sql
     }
 
     public static async getInstance(initOpt: IInitOpt): Promise<any> {
       if (!this.instance) {
         this.instance = new FullTextNim(initOpt)
+        let error = null
         try {
           await this.instance.initDB()
-        } catch (err) {
-          throw err
+          console.log(`Init DB successfully`)
+        } catch (err: any) {
+          console.error(`Failed to initialize database, error: ${err && err.message}`)
+          error = err
+        }
+        // 如果 initdb 出错了，那么尝试从备份恢复，然后在重新打开 db，最后实在恢复不动则抛出错误给上层
+        if (error) {
+          try {
+            await this.restoreDBFile()
+            await this.instance.initDB()
+          } catch (err: any) {
+            this.logger4j.error(`Failed to initialize database, already try to restore db， error: ${err.message}`)
+            throw err
+          }
         }
       }
-      return NimSdk.getInstance({
-        ...initOpt,
-        onroamingmsgs: (obj, ...rest) => {
-          obj && obj.msgs && this.instance?.putFts(obj.msgs)
-          initOpt.onroamingmsgs && initOpt.onroamingmsgs(obj, ...rest)
-        },
-        onofflinemsgs: (obj, ...rest) => {
-          obj && obj.msgs && this.instance?.putFts(obj.msgs)
-          initOpt.onofflinemsgs && initOpt.onofflinemsgs(obj, ...rest)
-        },
-        onmsg: (...args: any) => {
-          this.instance?.putFts(args[0])
-          initOpt.onmsg && initOpt.onmsg(...args)
-        },
-        onDeleteMsgSelf: (...args: any) => {
-          // 删除 fts
-          const msgs = args[0]
-          const ids = msgs && msgs.map((msg) => msg.idClient)
-          if (ids) {
-            this.instance?.deleteFts(ids)
-          }
-          initOpt.onDeleteMsgSelf && initOpt.onDeleteMsgSelf(...args)
-        },
-        onsysmsg: (obj, ...rest) => {
-          // 撤回
-          if (obj && obj.type === 'deleteMsg') {
-            this.instance?.deleteFts(obj.deletedIdClient)
-          }
-          initOpt.onsysmsg && initOpt.onsysmsg(obj, ...rest)
-        },
-        onofflinesysmsgs: (obj, ...rest) => {
-          const ids =
-            obj &&
-            obj.map((msg) => msg.type === 'deleteMsg' && msg.deletedIdClient)
-          if (ids) {
-            this.instance?.deleteFts(ids)
-          }
-          initOpt.onofflinesysmsgs && initOpt.onofflinesysmsgs(obj, ...rest)
-        },
+      return Promise.resolve().then(() => {
+        return NimSdk.getInstance({
+          ...initOpt,
+          onroamingmsgs: (obj, ...rest) => {
+            obj && obj.msgs && this.instance?.putFts(obj.msgs)
+            initOpt.onroamingmsgs && initOpt.onroamingmsgs(obj, ...rest)
+          },
+          onofflinemsgs: (obj, ...rest) => {
+            obj && obj.msgs && this.instance?.putFts(obj.msgs)
+            initOpt.onofflinemsgs && initOpt.onofflinemsgs(obj, ...rest)
+          },
+          onmsg: (...args: any) => {
+            this.instance?.putFts(args[0])
+            initOpt.onmsg && initOpt.onmsg(...args)
+          },
+          onDeleteMsgSelf: (...args: any) => {
+            // 删除 fts
+            const msgs = args[0]
+            const ids = msgs && msgs.map((msg) => msg.idClient)
+            if (ids) {
+              this.instance?.deleteFts(ids)
+            }
+            initOpt.onDeleteMsgSelf && initOpt.onDeleteMsgSelf(...args)
+          },
+          onsysmsg: (obj, ...rest) => {
+            // 撤回
+            if (obj && obj.type === 'deleteMsg') {
+              this.instance?.deleteFts(obj.deletedIdClient)
+            }
+            initOpt.onsysmsg && initOpt.onsysmsg(obj, ...rest)
+          },
+          onofflinesysmsgs: (obj, ...rest) => {
+            const ids =
+              obj &&
+              obj.map((msg) => msg.type === 'deleteMsg' && msg.deletedIdClient)
+            if (ids) {
+              this.instance?.deleteFts(ids)
+            }
+            initOpt.onofflinesysmsgs && initOpt.onofflinesysmsgs(obj, ...rest)
+          },
+        })
       })
     }
   }
